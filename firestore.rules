@@ -1,0 +1,146 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validRoom(roomId) {
+      return roomId.matches('[a-f0-9]{32}');
+    }
+
+    function isMember(roomId) {
+      return signedIn()
+        && validRoom(roomId)
+        && exists(/databases/$(database)/documents/rooms/$(roomId)/members/$(request.auth.uid));
+    }
+
+    function validParticipant(participantId) {
+      return participantId is string
+        && participantId in ['abdennour', 'isabelle', 'sherine', 'meriem'];
+    }
+
+    function validEntry(entryId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'participantId', 'day', 'status', 'updatedBy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'participantId', 'day', 'status', 'updatedBy', 'updatedAt'
+        ])
+        && validParticipant(data.participantId)
+        && data.day is int
+        && data.day >= 0 && data.day <= 6
+        && entryId == data.participantId + '_' + string(data.day)
+        && data.status is string
+        && data.status in ['success', 'failure']
+        && data.updatedBy is string
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function validProfile(participantId) {
+      let data = request.resource.data;
+      return validParticipant(participantId)
+        && data.keys().hasAll(['color', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['color', 'updatedBy', 'updatedAt'])
+        && data.color is string
+        && data.color in ['royal', 'turquoise', 'blue', 'green', 'purple', 'pink', 'yellow', 'orange']
+        && data.updatedBy is string
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function parisMidnight(date) {
+      // EU clock changes fall on the last Sunday of March and October.
+      // At midnight on the transition Sunday the previous offset still applies.
+      let marchEnd = timestamp.date(date.year(), 3, 31);
+      let octoberEnd = timestamp.date(date.year(), 10, 31);
+      let marchSunday = marchEnd - duration.value((int(marchEnd.toMillis() / 86400000) + 4) % 7, 'd');
+      let octoberSunday = octoberEnd - duration.value((int(octoberEnd.toMillis() / 86400000) + 4) % 7, 'd');
+      let offset = date > marchSunday && date <= octoberSunday ? 2 : 1;
+      return date - duration.value(offset, 'h');
+    }
+
+    function voteIsOpen(roomId) {
+      let start = get(/databases/$(database)/documents/rooms/$(roomId)).data.startDate;
+      let finalDay = timestamp.date(int(start[0:4]), int(start[5:7]), int(start[8:10])) + duration.value(6, 'd');
+      return request.time >= parisMidnight(finalDay);
+    }
+
+    function validVote(participantId) {
+      let data = request.resource.data;
+      return validParticipant(participantId)
+        && data.keys().hasAll(['vote', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['vote', 'updatedBy', 'updatedAt'])
+        && data.vote is string
+        && data.vote in ['yes', 'no']
+        && data.updatedBy is string
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    match /rooms/{roomId} {
+      // Knowing the private room identifier allows the invitation to be opened.
+      // Collection listing is denied, including before joining a room.
+      allow get: if signedIn() && validRoom(roomId);
+      allow list, update, delete: if false;
+
+      allow create: if signedIn()
+        && validRoom(roomId)
+        && request.resource.data.keys().hasAll([
+          'startDate', 'creatorUid', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'startDate', 'creatorUid', 'createdAt'
+        ])
+        && request.resource.data.creatorUid is string
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.startDate is string
+        && request.resource.data.startDate.matches(
+          '[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'
+        );
+
+      match /members/{uid} {
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow list, update, delete: if false;
+
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && validRoom(roomId)
+          && exists(/databases/$(database)/documents/rooms/$(roomId))
+          && request.resource.data.keys().hasAll(['joinedAt'])
+          && request.resource.data.keys().hasOnly(['joinedAt'])
+          && request.resource.data.joinedAt is timestamp
+          && request.resource.data.joinedAt == request.time;
+      }
+
+      match /entries/{entryId} {
+        allow read: if isMember(roomId);
+        allow create, update: if isMember(roomId) && validEntry(entryId);
+        allow delete: if isMember(roomId)
+          && entryId.matches('(abdennour|isabelle|sherine|meriem)_[0-6]');
+      }
+
+      match /profiles/{participantId} {
+        allow read: if isMember(roomId);
+        allow create, update: if isMember(roomId) && validProfile(participantId);
+        allow delete: if false;
+      }
+
+      match /votes/{participantId} {
+        allow read: if isMember(roomId);
+        allow create, update: if isMember(roomId)
+          && validVote(participantId)
+          && voteIsOpen(roomId);
+        allow delete: if false;
+      }
+    }
+  }
+}

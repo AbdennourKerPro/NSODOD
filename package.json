@@ -1,0 +1,13 @@
+{
+  "name": "nsodod",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Le jardin du défi NoSugarOrDieOfDiabetes",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/app.mjs && node --check src/store.mjs && node --check src/domain.mjs && node --test tests/*.test.mjs"
+  }
+}
