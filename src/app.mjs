@@ -40,7 +40,9 @@ function escape(value) { return String(value).replace(/[&<>"']/g, character => (
 function mascot(person, mood = 'neutral', extra = '', colorOverride = null) {
   const phase = Math.max(0, PEOPLE.findIndex(candidate => candidate.id === person?.id));
   const color = colorOverride || (person ? profileColor(state, person.id) : 'green');
-  return `<div class="mascot ${color} mood-${mood} ${extra}" style="--mascot-delay:-${phase * .7}s" role="img" aria-label="${person ? escape(person.plant) : 'Une petite pousse'}, ${mood === 'happy' ? 'en pleine forme' : mood === 'sad' ? 'un peu raplapla' : 'prête pour le défi'}"></div>`;
+  // Keep the SVG filter in this document: external SVG filters can leave the sprite green.
+  const royalFilter = color === 'royal' ? ';filter:url(#mascot-royal)' : '';
+  return `<div class="mascot ${color} mood-${mood} ${extra}" style="--mascot-delay:-${phase * .7}s${royalFilter}" role="img" aria-label="${person ? escape(person.plant) : 'Une petite pousse'}, ${mood === 'happy' ? 'en pleine forme' : mood === 'sad' ? 'un peu raplapla' : 'prête pour le défi'}"></div>`;
 }
 function badge() {
   const labels = { local: 'Sur cet appareil', connecting: 'Connexion au jardin…', shared: 'Jardin partagé', offline: 'Hors connexion', pending: 'Envoi en cours…', error: 'Connexion interrompue' };

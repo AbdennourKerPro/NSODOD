@@ -238,7 +238,8 @@ footer.site-footer p + p { color: #6b7564; font-size: 13px; }
 .home-rules-section > .text-button { display: block; margin: 28px auto 0; }
 .mascot.green { filter: none; }
 .mascot.blue { filter: hue-rotate(140deg) saturate(1.12); }
-.mascot.royal { filter: url('../assets/mascot-filters.svg#royal'); }
+.mascot-filters { position: absolute; pointer-events: none; }
+.mascot.royal { filter: hue-rotate(140deg) saturate(1.12); }
 .mascot.turquoise { filter: hue-rotate(95deg) saturate(1.15); }
 .mascot.purple { filter: hue-rotate(180deg) saturate(.84); }
 .mascot.pink { filter: hue-rotate(240deg) saturate(.87); }

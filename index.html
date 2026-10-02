@@ -15,6 +15,17 @@
     <script type="module" src="./src/app.mjs"></script>
   </head>
   <body>
+    <svg class="mascot-filters" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="mascot-royal" color-interpolation-filters="sRGB" x="-10%" y="-10%" width="120%" height="120%">
+          <feColorMatrix type="matrix" values="
+            1.145087 -0.852388 0.707301 0 0
+            0.132231 0.223141 0.644628 0 0
+            -0.310376 1.823462 -0.513086 0 0
+            0 0 0 1 0" />
+        </filter>
+      </defs>
+    </svg>
     <a href="#main" class="skip-link">Aller au contenu</a>
     <div id="app"><main class="boot"><span class="boot-sprout">🌱</span><p>On ouvre le jardin…</p></main></div>
     <div id="toast" role="status" aria-live="polite"></div>
