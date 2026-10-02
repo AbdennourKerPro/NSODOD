@@ -213,7 +213,7 @@ test('existing v1 backups keep their dates and results while adding optional mas
   assert.deepEqual(migrated.entries, backup.entries);
   assert.deepEqual(migrated.profiles, {});
   assert.deepEqual(migrated.votes, {});
-  assert.deepEqual(PEOPLE.map(person => profileColor(migrated, person.id)), ['royal', 'turquoise', 'purple', 'pink']);
+  assert.deepEqual(PEOPLE.map(person => profileColor(migrated, person.id)), ['royal', 'turquoise', 'green', 'pink']);
   assert.equal(personStats(migrated, 'abdennour', '2026-10-02').successes, 1);
   assert.equal(Object.hasOwn(backup, 'profiles'), false);
 });
@@ -245,7 +245,7 @@ test('sanitization preserves valid per-person overrides and discards malformed p
   const cleaned = cleanState(raw);
   assert.deepEqual(cleaned.profiles, { abdennour: { color: 'orange' }, isabelle: { color: 'purple' } });
   assert.deepEqual(cleaned.entries, raw.entries);
-  assert.equal(profileColor(cleaned, 'sherine'), 'purple');
+  assert.equal(profileColor(cleaned, 'sherine'), 'green');
   assert.equal(profileColor(cleaned, 'meriem'), 'pink');
   raw.profiles.abdennour.color = 'pink';
   assert.equal(profileColor(cleaned, 'abdennour'), 'orange');

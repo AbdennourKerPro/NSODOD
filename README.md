@@ -24,7 +24,7 @@ Le 9 octobre, un vote « Prolonger » ou « S’arrêter ici » s'ouvre pour cha
 
 Les anciennes sauvegardes locales sans bilan ni vote adoptent la nouvelle date, en gardant les couleurs. Les sauvegardes avec bilans et les jardins Firebase existants conservent leur calendrier pour préserver leurs résultats.
 
-La mascotte d'Abdennour est bleu royal, celle d'Isabelle bleu turquoise, celle de Shérine violette et celle de Meriem rose. Chacun peut choisir sa couleur dans les paramètres de son profil, parmi bleu royal, bleu turquoise, bleu, vert, violet, rose, jaune et orange. Le choix est sauvegardé sans modifier les résultats ou la date du défi. Les anciens choix personnalisés restent conservés lorsque les couleurs par défaut évoluent.
+La mascotte d'Abdennour est bleu royal, celle d'Isabelle bleu turquoise, celle de Shérine verte et celle de Meriem rose. Chacun peut choisir sa couleur dans les paramètres de son profil, parmi bleu royal, bleu turquoise, bleu, vert, violet, rose, jaune et orange. Le choix est sauvegardé sans modifier les résultats ou la date du défi. Les anciens choix personnalisés restent conservés lorsque les couleurs par défaut évoluent.
 
 ## Sauvegarde locale ou jardin partagé
 

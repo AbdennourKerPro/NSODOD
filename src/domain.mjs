@@ -11,7 +11,7 @@ export const COLORS = Object.freeze([
 export const PEOPLE = Object.freeze([
   { id: 'abdennour', name: 'Abdennour', plant: 'Basil', color: 'royal', emoji: '🌿' },
   { id: 'isabelle', name: 'Isabelle', plant: 'Sunny', color: 'turquoise', emoji: '🌼' },
-  { id: 'sherine', name: 'Shérine', plant: 'Lila', color: 'purple', emoji: '🪻' },
+  { id: 'sherine', name: 'Shérine', plant: 'Lila', color: 'green', emoji: '🪻' },
   { id: 'meriem', name: 'Meriem', plant: 'Poppy', color: 'pink', emoji: '🌷' },
 ]);
 export const DAYS = 7;
