@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CHALLENGE_START, COLORS, PEOPLE, addDays, assertEntry, assertVote, challengePhase, cleanState, dayIndex, emptyState,
-  entryKey, isDate, isRoomId, newRoomId, personStats, profileColor, ranking, todayISO, validProfile, validVote, voteSummary,
+  entryKey, isDate, isRoomId, karaokeShares, newRoomId, personStats, profileColor, ranking, todayISO, validProfile, validVote, voteSummary,
 } from '../src/domain.mjs';
 
 function garden(startDate, results) {
@@ -14,6 +14,45 @@ function garden(startDate, results) {
   }
   return state;
 }
+
+function karaokeGarden(scores) {
+  return garden(CHALLENGE_START, Object.fromEntries(PEOPLE.map((person, index) => [person.id,
+    Array.from({ length: 7 }, (_, day) => day < scores[index] ? 'success' : 'failure')])));
+}
+
+test('karaoke example splits 72 euros into 12, 16, 20 and 24 euros', () => {
+  const bill = karaokeShares(karaokeGarden([7, 5, 3, 1]), '2026-10-10');
+  assert.deepEqual(bill.shares.map(person => person.cents), [1200, 1600, 2000, 2400]);
+  assert.equal(bill.final, true);
+});
+
+test('all 4096 karaoke score combinations preserve total, equal prices and reward higher scores', () => {
+  for (let combination = 0; combination < 4096; combination++) {
+    const scores = PEOPLE.map((_, index) => (combination >> (index * 3)) & 7);
+    const bill = karaokeShares(karaokeGarden(scores), '2026-10-10');
+    assert.equal(bill.shares.reduce((total, person) => total + person.cents, 0), 7200);
+    for (const person of bill.shares) {
+      assert.ok(Number.isInteger(person.cents) && person.cents >= 750 && person.cents <= 2850);
+      for (const other of bill.shares) {
+        assert.equal(person.cents - other.cents, 200 * (other.successes - person.successes));
+      }
+    }
+  }
+});
+
+test('karaoke estimates ignore future results and missing entries do not count as failures', () => {
+  const state = karaokeGarden([7, 5, 3, 1]);
+  const before = karaokeShares(state, '2026-10-02');
+  assert.deepEqual(before.shares.map(person => person.cents), [1800, 1800, 1800, 1800]);
+  assert.equal(before.recorded, 0);
+  assert.equal(before.final, false);
+  assert.equal(karaokeShares(state, '2026-10-09').final, false);
+  delete state.entries[entryKey('abdennour', 6)];
+  const pending = karaokeShares(state, '2026-10-10');
+  assert.equal(pending.remaining, 1);
+  assert.equal(pending.final, false);
+  assert.equal(pending.shares.find(person => person.id === 'abdennour').failures, 0);
+});
 
 test('calendar date follows Paris midnight on both sides of the spring clock change', () => {
   const instants = [

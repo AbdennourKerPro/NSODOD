@@ -189,6 +189,45 @@ footer.site-footer p + p { color: #6b7564; font-size: 13px; }
   .home-profile strong { font-size: 17px; }
   .home-profile-state { font-size: 12px; }
 }
+.karaoke { margin-top: 25px; padding: 27px; background: linear-gradient(135deg, #fff, #f9f5fc); }
+.karaoke-total { font-size: 27px; font-weight: 700; text-align: right; white-space: nowrap; color: #66517d; }
+.karaoke-total small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+.karaoke-intro,.karaoke-note { font-size: 13px; line-height: 1.7; color: var(--muted); }
+.karaoke-intro { margin: 10px 0 18px; }
+.karaoke-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.karaoke-label { padding: 5px 10px; border-radius: 20px; background: #eee5f6; color: #66517d; font-weight: 600; }
+.karaoke-tickets { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; list-style: none; padding: 0; margin: 22px 0 18px; }
+.karaoke-ticket { position: relative; min-width: 0; border: 1px solid #e4dceb; border-radius: 16px; background: #fff; text-align: center; overflow: hidden; }
+.karaoke-ticket.is-you { border-color: #b6a0cd; box-shadow: 0 5px 18px #6d577b12; }
+.ticket-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 13px; color: #66517d; background: #f3edf8; font-size: 11px; }
+.ticket-top > span + span { font-size: 20px; line-height: 1; }
+.ticket-mascot { display: flex; justify-content: center; padding: 13px 0 3px; }
+.ticket-mascot .mascot { width: 100px; }
+.karaoke-ticket h3 { margin: 4px 5px; font-size: 16px; }
+.karaoke-ticket .you-badge { margin-left: 5px; font-size: 9px; }
+.ticket-results { font-size: 11px; color: var(--muted); margin: 6px 0 18px; }
+.ticket-price { position: relative; padding: 17px 8px 13px; border-top: 1px dashed #d8cce4; }
+.ticket-price::before,.ticket-price::after { content: ''; position: absolute; top: -7px; width: 12px; height: 12px; background: #f9f5fc; border: 1px solid #e4dceb; border-radius: 50%; }
+.ticket-price::before { left: -7px; }
+.ticket-price::after { right: -7px; }
+.ticket-price strong { display: block; font-size: 29px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ticket-price > span { display: block; font-size: 10px; color: #66517d; margin-top: 5px; min-height: 30px; }
+.ticket-adjustment { font-size: 10px; line-height: 1.5; padding: 0 10px 15px; color: var(--muted); }
+.karaoke-formula { border-top: 1px solid #e4dceb; padding-top: 15px; margin-top: 17px; font-size: 13px; line-height: 1.7; }
+.karaoke-formula summary { cursor: pointer; color: #66517d; font-weight: 600; }
+.karaoke-formula p { color: var(--muted); margin: 12px 0 0; }
+.karaoke-formula strong { color: var(--ink); font-weight: 600; }
+.karaoke-jump { color: #5e4770; text-decoration: underline; text-underline-offset: 3px; font-size: 12px; background: none; border: 0; padding: 0; margin-top: 4px; }
+@media (max-width: 850px) { .karaoke-tickets { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 700px) {
+  .karaoke { padding: 23px 19px; }
+  .karaoke .card-heading { align-items: flex-start; gap: 12px; }
+  .karaoke h2 { font-size: 21px; }
+  .karaoke-total { font-size: 23px; }
+  .karaoke-tickets { gap: 10px; }
+  .karaoke-ticket h3 { font-size: 14px; }
+}
+@media (max-width: 370px) { .karaoke .card-heading { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) {
   .mascot { animation: none; }
   .home-mascot-scene { transition: none; }

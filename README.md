@@ -104,6 +104,8 @@ La validation du calendrier et le blocage des jours futurs sont effectués par l
 
 ## Vérifier le projet
 
+La sortie karaoké du 10 octobre coûte 72 €. Le dashboard affiche quatre billets calculés depuis les bilans : `part = 18 € + 2 € × (moyenne des jours réussis − jours réussis de la personne)`. Les scores égaux paient la même part et le total reste exactement 72 € (parts entre 7,50 € et 28,50 €). Les montants restent provisoires jusqu'au 10 octobre et aux 28 bilans remplis ; seuls les sept jours initiaux comptent, même en cas de prolongation. Aucun paiement n'est déclenché et aucune nouvelle collection Firebase n'est nécessaire.
+
 ```sh
 npm run check
 npm test

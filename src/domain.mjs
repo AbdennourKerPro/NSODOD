@@ -107,6 +107,23 @@ export function ranking(state, today = todayISO()) {
   const any = all.some(person => person.recorded);
   return all.sort((a, b) => b.successes - a.successes).map(person => ({ ...person, rank: any ? 1 + all.filter(other => other.successes > person.successes).length : null }));
 }
+export const KARAOKE_TOTAL_CENTS = 7200;
+export function karaokeShares(state, today = todayISO()) {
+  const participants = ranking(state, today);
+  const totalSuccesses = participants.reduce((total, person) => total + person.successes, 0);
+  const recorded = participants.reduce((total, person) => total + person.recorded, 0);
+  const baseCents = KARAOKE_TOTAL_CENTS / PEOPLE.length;
+  // With four participants and a €2 score adjustment, every share is exact to 50 cents.
+  const shares = participants.map(person => ({
+    ...person,
+    cents: baseCents + 200 * (totalSuccesses / PEOPLE.length - person.successes),
+  }));
+  return {
+    shares, recorded, remaining: PEOPLE.length * DAYS - recorded,
+    final: dayIndex(state.startDate, today) >= DAYS && recorded === PEOPLE.length * DAYS,
+    totalCents: KARAOKE_TOTAL_CENTS,
+  };
+}
 export function newRoomId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 }

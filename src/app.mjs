@@ -1,4 +1,4 @@
-import { PEOPLE, COLORS, DAYS, CHALLENGE_START, addDays, challengePhase, dateLabel, dayIndex, emptyState, entryKey, personStats, profileColor, ranking, todayISO, voteSummary } from './domain.mjs';
+import { PEOPLE, COLORS, DAYS, CHALLENGE_START, addDays, challengePhase, dateLabel, dayIndex, emptyState, entryKey, karaokeShares, personStats, profileColor, ranking, todayISO, voteSummary } from './domain.mjs';
 import { cloudConfigured, createStore, preference } from './store.mjs';
 
 const root = document.querySelector('#app');
@@ -113,7 +113,7 @@ function preparationCard() {
 }
 function calendarCelebration() {
   const date = dateLabel(celebrationDate, { weekday: 'long', day: 'numeric', month: 'long' });
-  return `<div class="calendar-celebration">${icon('people')}<div><strong><time datetime="${celebrationDate}">${date[0].toUpperCase() + date.slice(1)}</time> · On fête la fin du défi</strong><p>Sortie entre nous pour célébrer cette semaine. 🎉</p></div></div>`;
+  return `<div class="calendar-celebration">${icon('people')}<div><strong><time datetime="${celebrationDate}">${date[0].toUpperCase() + date.slice(1)}</time> · On fête la fin du défi</strong><p>Karaoké entre nous 🎤 · 72 € à partager selon nos résultats.</p><button class="karaoke-jump" data-action="karaoke">Voir nos billets karaoké ↓</button></div></div>`;
 }
 function preparationCalendar() {
   return `<div class="preparation-calendar" aria-label="Calendrier du défi et de la sortie"><div class="week-grid">${Array.from({ length: DAYS }, (_, day) => {
@@ -146,12 +146,38 @@ function leaderboard() {
   const total = rows.reduce((sum, person) => sum + person.successes, 0);
   return `<section class="leaderboard panel" aria-labelledby="leaderboard-title"><div class="card-heading"><div><span class="eyebrow">LA FORCE DU COLLECTIF</span><h2 id="leaderboard-title">Le jardin des complices ${icon('trophy')}</h2></div><span class="group-total">${icon('sprout')}<strong>${total}</strong> / 28 victoires ensemble</span></div><div class="leaderboard-head"><span>COMPLICE</span><span>LA SEMAINE</span><span>JOURS RÉUSSIS</span></div><ol class="ranking-list">${rows.map(person => `<li class="rank-row ${person.id === selected.id ? 'is-you' : ''}"><span class="rank-number ${person.rank === 1 && person.successes ? 'first' : ''}">${person.rank || '—'}</span><span class="rank-avatar ${profileColor(state, person.id)}">${mascot(person, person.mood)}</span><div class="rank-person"><strong>${person.name}${person.id === selected.id ? '<span class="you-badge">Toi</span>' : ''}</strong><span>${person.mood === 'happy' ? `${person.plant} rayonne` : person.mood === 'sad' ? `${person.plant} reprend son souffle` : `${person.plant} attend sa première pousse`}${person.streak > 1 ? ` <span class="streak-inline">· ${person.streak} de suite ${icon('fire')}</span>` : ''}</span></div><div class="mini-week" aria-label="Semaine de ${person.name}">${person.statuses.map((status, day) => `<span class="mini-day ${status || ''} ${day > dayIndex(state.startDate) ? 'future' : ''}" title="Jour ${day + 1} : ${status === 'success' ? 'réussi' : status === 'failure' ? 'craqué' : 'sans bilan'}">${status === 'success' ? icon('check') : status === 'failure' ? '<span>·</span>' : ''}</span>`).join('')}</div><div class="rank-score"><strong>${person.successes}<span>/ 7</span></strong></div></li>`).join('')}</ol><div class="leaderboard-foot"><span><i class="legend-success"></i>Réussi <i class="legend-failure"></i>Craqué <i class="legend-empty"></i>Pas encore de bilan</span><span>À égalité ? Même place, même fierté.</span></div></section>`;
 }
+function money(cents) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100);
+}
+function karaokeCard() {
+  const bill = karaokeShares(state);
+  return `<section class="karaoke panel" aria-labelledby="karaoke-title">
+    <div class="card-heading"><div><span class="eyebrow">LE 10 OCTOBRE · TOUS AU MICRO</span><h2 id="karaoke-title">Les billets du karaoké 🎤</h2></div><span class="karaoke-total">${money(bill.totalCents)}<small>pour nous quatre</small></span></div>
+    <p class="karaoke-intro">Plus tu tiens le défi, plus ton billet s’allège. La playlist, elle, reste pour tout le monde.</p>
+    <div class="karaoke-status"><span class="karaoke-label">${bill.final ? 'Répartition finale' : 'Estimation en direct'}</span><span>${bill.recorded} / 28 bilans renseignés</span></div>
+    <ol class="karaoke-tickets">${bill.shares.map(person => `<li class="karaoke-ticket ${person.id === selected.id ? 'is-you' : ''}">
+      <div class="ticket-top"><span>${person.rank ? `#${person.rank} au jardin` : 'Au départ'}</span><span aria-hidden="true">♫</span></div>
+      <div class="ticket-mascot">${mascot(person, person.mood)}</div>
+      <h3>${person.name}${person.id === selected.id ? '<span class="you-badge">Toi</span>' : ''}</h3>
+      <p class="ticket-results">${person.successes} réussi${person.successes > 1 ? 's' : ''} · ${person.failures} craqué${person.failures > 1 ? 's' : ''}</p>
+      <div class="ticket-price"><strong>${money(person.cents)}</strong><span>${person.cents < 1800 ? 'Bravo, billet allégé !' : person.cents > 1800 ? 'Tu offres un peu plus de décibels' : 'Le juste milieu'}</span></div>
+      <div class="ticket-adjustment">${person.cents === 1800 ? 'La part de départ : 18 €' : `${person.cents < 1800 ? '−' : '+'}${money(Math.abs(person.cents - 1800))} par rapport aux 18 € de départ`}</div>
+    </li>`).join('')}</ol>
+    <p class="karaoke-note">${bill.final ? 'Les sept jours sont terminés et tous les bilans sont remplis. Une correction de bilan recalculera les parts.' : `${bill.remaining ? `Encore ${bill.remaining} bilan${bill.remaining > 1 ? 's' : ''} à renseigner. ` : ''}Montants provisoires : la répartition finale sera disponible le 10 octobre, une fois les 28 bilans remplis. Un jour sans bilan n’est pas compté comme un échec.`}</p>
+    <details class="karaoke-formula"><summary>Comment sont calculés nos billets ?</summary><div>
+      <p>On part de <strong>18 € chacun</strong>. Ta part = <strong>18 € + 2 € × (moyenne des jours réussis du groupe − tes jours réussis)</strong>.</p>
+      <p>Un jour réussi de plus que quelqu’un d’autre donne une part <strong>2 € moins chère</strong> que la sienne. À la fin, avec sept bilans chacun, plus tu as de jours ratés, plus tu contribues. À égalité, même prix.</p>
+      <p>Exemple : <strong>7, 5, 3 et 1 jours réussis → 12 €, 16 €, 20 € et 24 €</strong>. À scores égaux : 18 € chacun. Le total reste toujours 72 €, avec des parts entre 7,50 € et 28,50 €.</p>
+      <p>Seuls les sept jours du 3 au 9 octobre comptent pour cette sortie, même si vous votez pour prolonger le défi.</p>
+    </div></details>
+  </section>`;
+}
 function dashboard() {
   const index = dayIndex(state.startDate);
   const stats = personStats(state, selected.id);
   const range = `${dateLabel(state.startDate)} — ${dateLabel(addDays(state.startDate, 6), { year: 'numeric' })}`;
   const dayText = index < 0 ? `Départ le ${dateLabel(state.startDate, { day: 'numeric', month: 'long' })}` : index >= DAYS ? 'Semaine terminée' : `Jour ${index + 1} sur 7`;
-  return `${header()}<main id="main" class="dashboard-main"><section class="dashboard-title"><div><div class="title-eyebrow"><span class="eyebrow">BIENVENUE DANS TON PETIT JARDIN</span>${badge()}</div><h1>Salut, ${selected.name}<span class="greeting-sun">${icon('sun')}</span></h1><p>Chaque jour sans sucre, c’est une nouvelle pousse.</p></div><div class="challenge-date"><span>${icon('calendar')}${range}</span><strong><span class="small-dot"></span>${dayText}</strong></div></section>${['offline', 'pending', 'error'].includes(connection) ? `<div class="connection-banner" role="status">${icon('info')}${connection === 'error' ? 'La connexion au jardin est interrompue. Recharge cette page pour réessayer.' : connection === 'pending' ? 'Ta modification attend sa confirmation. Garde cette page ouverte pendant l’envoi.' : 'Le jardin partagé est momentanément hors connexion. Les bilans seront disponibles quand la connexion reviendra.'}${connection === 'error' ? '<button class="outline-button" data-action="retry">Réessayer</button>' : ''}</div>` : ''}<section class="stats-grid" aria-label="Ton bilan de la semaine"><div class="stat-card"><span class="stat-icon stat-green">${icon('sprout')}</span><div><span>Jours réussis</span><strong>${stats.successes}<small> / 7</small></strong></div><span class="stat-caption">${stats.successes ? 'Bien joué !' : 'Tout peut pousser'}</span></div><div class="stat-card"><span class="stat-icon stat-orange">${icon('fire')}</span><div><span>Série en cours</span><strong>${stats.streak}<small> ${stats.streak > 1 ? 'jours' : 'jour'}</small></strong></div><span class="stat-caption">${stats.streak > 1 ? 'Ça pousse fort' : 'Une pousse à la fois'}</span></div><div class="stat-card"><span class="stat-icon stat-purple">${icon('trophy')}</span><div><span>Ta place au jardin</span><strong>${ranking(state).find(person => person.id === selected.id).rank ? '#' + ranking(state).find(person => person.id === selected.id).rank : '—'}<small> / 4</small></strong></div><span class="stat-caption">${Object.keys(state.entries).length ? 'Ensemble, on avance' : 'Le défi commence'}</span></div></section><div class="dashboard-grid">${selectedDayCard(stats, index)}${plantCard(stats)}</div>${extensionVote()}${leaderboard()}<div class="kind-note">${icon('heart')}<p><strong>Une journée ratée n’est pas un défi raté.</strong> Tes victoires restent, ta plante t’attend. On continue ensemble.</p><span>✳</span></div></main>${footer()}`;
+  return `${header()}<main id="main" class="dashboard-main"><section class="dashboard-title"><div><div class="title-eyebrow"><span class="eyebrow">BIENVENUE DANS TON PETIT JARDIN</span>${badge()}</div><h1>Salut, ${selected.name}<span class="greeting-sun">${icon('sun')}</span></h1><p>Chaque jour sans sucre, c’est une nouvelle pousse.</p></div><div class="challenge-date"><span>${icon('calendar')}${range}</span><strong><span class="small-dot"></span>${dayText}</strong></div></section>${['offline', 'pending', 'error'].includes(connection) ? `<div class="connection-banner" role="status">${icon('info')}${connection === 'error' ? 'La connexion au jardin est interrompue. Recharge cette page pour réessayer.' : connection === 'pending' ? 'Ta modification attend sa confirmation. Garde cette page ouverte pendant l’envoi.' : 'Le jardin partagé est momentanément hors connexion. Les bilans seront disponibles quand la connexion reviendra.'}${connection === 'error' ? '<button class="outline-button" data-action="retry">Réessayer</button>' : ''}</div>` : ''}<section class="stats-grid" aria-label="Ton bilan de la semaine"><div class="stat-card"><span class="stat-icon stat-green">${icon('sprout')}</span><div><span>Jours réussis</span><strong>${stats.successes}<small> / 7</small></strong></div><span class="stat-caption">${stats.successes ? 'Bien joué !' : 'Tout peut pousser'}</span></div><div class="stat-card"><span class="stat-icon stat-orange">${icon('fire')}</span><div><span>Série en cours</span><strong>${stats.streak}<small> ${stats.streak > 1 ? 'jours' : 'jour'}</small></strong></div><span class="stat-caption">${stats.streak > 1 ? 'Ça pousse fort' : 'Une pousse à la fois'}</span></div><div class="stat-card"><span class="stat-icon stat-purple">${icon('trophy')}</span><div><span>Ta place au jardin</span><strong>${ranking(state).find(person => person.id === selected.id).rank ? '#' + ranking(state).find(person => person.id === selected.id).rank : '—'}<small> / 4</small></strong></div><span class="stat-caption">${Object.keys(state.entries).length ? 'Ensemble, on avance' : 'Le défi commence'}</span></div></section><div class="dashboard-grid">${selectedDayCard(stats, index)}${plantCard(stats)}</div>${extensionVote()}${leaderboard()}${karaokeCard()}<div class="kind-note">${icon('heart')}<p><strong>Une journée ratée n’est pas un défi raté.</strong> Tes victoires restent, ta plante t’attend. On continue ensemble.</p><span>✳</span></div></main>${footer()}`;
 }
 function rulesPage() {
   return `${header()}<main id="main" class="rules-main"><h1>Les règles du défi</h1>${challengeRules(false)}<section class="start-settings panel"><div><h2>Du ${dateLabel(state.startDate, { day: 'numeric', month: 'long' })} au ${dateLabel(addDays(state.startDate, DAYS - 1), { day: 'numeric', month: 'long', year: 'numeric' })}</h2><p>Les bilans s’ouvrent le premier jour. Le dernier jour, chacun peut voter pour prolonger le défi ou s’arrêter ici.</p></div></section><button class="solid-button back-garden" data-action="navigate" data-page="dashboard">${icon('sprout')} Retour au jardin</button></main>${footer()}`;
@@ -243,6 +269,13 @@ async function onAction(event) {
   const button = event.target.closest('[data-action]');
   if (!button || button.disabled) return;
   switch (button.dataset.action) {
+    case 'karaoke': {
+      const title = document.querySelector('#karaoke-title');
+      title?.setAttribute('tabindex', '-1');
+      title?.focus({ preventScroll: true });
+      title?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+      break;
+    }
     case 'home': selected = null; preference('person', null); page = 'dashboard'; homeRulesOpen = false; render(); window.scrollTo(0, 0); break;
     case 'select':
       selected = PEOPLE.find(person => person.id === button.dataset.person);
