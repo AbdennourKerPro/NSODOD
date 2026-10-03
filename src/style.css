@@ -487,3 +487,5 @@ dialog[data-view="admin"] { max-width: 680px; }
   .vote-buttons { grid-template-columns: 1fr; }
   .vote-participants { grid-template-columns: 1fr; }
 }
+
+.mini-day.trial { opacity: .45; background: transparent; border: 1px dashed #929a90; }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { analyzeText, createIntegrityService, fingerprint, MODEL } from '../server/integrity.mjs';
 import { signSession, verifySession, sameSecret } from '../server/auth.mjs';
 import { sameOrigin, readBody, handler } from '../server/http.mjs';
-import { commonGarden, COMMON_GARDEN } from '../server/garden.mjs';
+import { commonGarden, COMMON_GARDEN, excludeTrialJokers } from '../server/garden.mjs';
 
 class MemoryDb {
   data = new Map(); version = 0; queue = Promise.resolve();
@@ -16,11 +16,11 @@ class MemoryDb {
     this.data.set(path, { value: { ...(merge ? this.data.get(path)?.value : {}), ...structuredClone(value) }, version: ++this.version });
   }
   doc(path) { return { path, get: async () => this.snapshot(path), set: async value => this.write(path, value) }; }
-  collection(path) { return { get: async () => ({ docs: [...this.data.keys()].filter(key => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes('/')).map(key => this.snapshot(key)) }) }; }
+  collection(path) { return { query: true, get: async () => ({ docs: [...this.data.keys()].filter(key => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes('/')).map(key => this.snapshot(key)) }) }; }
   runTransaction(fn) {
     const result = this.queue.then(async () => {
       const writes = [];
-      const value = await fn({ get: async ref => this.snapshot(ref.path), set: (ref, data) => writes.push([ref.path, data, false]), update: (ref, data) => writes.push([ref.path, data, true]) });
+      const value = await fn({ get: async ref => ref.query ? ref.get() : this.snapshot(ref.path), set: (ref, data) => writes.push([ref.path, data, false]), update: (ref, data) => writes.push([ref.path, data, true]) });
       for (const args of writes) this.write(...args);
       return value;
     });
@@ -60,6 +60,28 @@ test('a missing common garden causes an explicit failure rather than a new empty
   const db = new MemoryDb();
   await assert.rejects(commonGarden(db), /indisponible/);
   assert.equal(db.data.size, 0);
+});
+
+test('trial meal validation is refused and existing trial jokers are restored once', async () => {
+  const db = new MemoryDb();
+  db.write(`rooms/${room}`, { startDate: '2026-10-03' });
+  const review = addMeal(db);
+  const service = createIntegrityService({ db, analyze: async () => flagged });
+  await service.checkMeal(room, 'abdennour_0_lunch', 'uid');
+  await assert.rejects(service.decide(room, review, 'accepted'), /Galop d’essai/);
+  assert.equal(db.snapshot(path('jokerCounts', 'abdennour')).exists, false);
+  const ledger = id => `rooms/${COMMON_GARDEN}/jokerLedger/${id}`;
+  const count = `rooms/${COMMON_GARDEN}/jokerCounts/abdennour`;
+  db.write(ledger('abdennour_0_lunch'), { participantId: 'abdennour', active: true, reviewId: review });
+  db.write(ledger('abdennour_1_lunch'), { participantId: 'abdennour', active: true, reviewId: 'future-valid' });
+  db.write(count, { confirmed: 2 });
+  await excludeTrialJokers(db);
+  assert.equal(db.snapshot(count).data().confirmed, 1);
+  assert.equal(db.snapshot(ledger('abdennour_0_lunch')).data().active, false);
+  assert.equal(db.snapshot(ledger('abdennour_1_lunch')).data().active, true);
+  db.write(count, { confirmed: 2 });
+  await excludeTrialJokers(db);
+  assert.equal(db.snapshot(count).data().confirmed, 2);
 });
 function addMeal(db, id = 'abdennour_0_lunch', text = 'Un soda et des pâtes') {
   const [participantId, day, type] = id.split('_');

@@ -1,4 +1,4 @@
-import { entryKey, mealKey, validEntry, validMeal, validProfile, validVote } from '../src/domain.mjs';
+import { entryKey, mealKey, validEntry, validMeal, validProfile, validVote, PEOPLE } from '../src/domain.mjs';
 
 export const COMMON_GARDEN = '82491a2cc44319d6807ae8e9867f388d';
 const SOURCES = [
@@ -43,5 +43,24 @@ export async function commonGarden(db) {
       tx.set(marker, { completedAt: Date.now(), copied: copies.map(({ source, destination }) => ({ source, destination })) });
     });
   }
+  await excludeTrialJokers(db);
   return { roomId: COMMON_GARDEN };
+}
+
+export async function excludeTrialJokers(db) {
+  const marker = db.doc('gardenMigrations/october-3-trial-v1');
+  if ((await marker.get()).exists) return;
+  await db.runTransaction(async tx => {
+    if ((await tx.get(marker)).exists) return;
+    const ledger = await tx.get(db.collection(`rooms/${COMMON_GARDEN}/jokerLedger`));
+    const previous = [];
+    for (const person of PEOPLE) previous.push({ id: person.id, data: (await tx.get(db.doc(`rooms/${COMMON_GARDEN}/jokerCounts/${person.id}`))).data() || null });
+    const trials = ledger.docs.filter(doc => /^[a-z]+_0_/.test(doc.id) && doc.data().active);
+    for (const doc of trials) tx.set(db.doc(`rooms/${COMMON_GARDEN}/jokerLedger/${doc.id}`), { ...doc.data(), active: false, trial: true });
+    for (const person of PEOPLE) {
+      const confirmed = ledger.docs.filter(doc => doc.data().active && !/^[a-z]+_0_/.test(doc.id) && doc.data().participantId === person.id).length;
+      tx.set(db.doc(`rooms/${COMMON_GARDEN}/jokerCounts/${person.id}`), { confirmed, used: Math.min(3, confirmed), remaining: Math.max(0, 3 - confirmed), excess: Math.max(0, confirmed - 3) });
+    }
+    tx.set(marker, { completedAt: Date.now(), excluded: trials.map(doc => doc.id), previousCounts: previous });
+  });
 }

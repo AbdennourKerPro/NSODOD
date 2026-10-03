@@ -23,7 +23,7 @@ Enregistre les variables, puis ouvre **Deployments → dernier déploiement → 
 - Choisis le profil **Abdennour**, puis **Mon espace de contrôle**. Connecte-toi avec `ADMIN_PASSWORD`. Les alertes et leurs explications sont accessibles uniquement avec cette session administrateur, pas en choisissant simplement ce prénom.
 - **Valider · 1 joker** consomme un joker pour ce repas. **Rejeter l’alerte** ne consomme rien. **Annuler ma validation** restitue le joker attaché à cette validation. Les décisions sont conservées côté serveur.
 - Deux repas concernés dans la même journée consomment deux jokers. Un même repas ne peut en consommer qu’un, même s’il est modifié et analysé plusieurs fois. Les collations constituent une seule note de repas par jour. Un repas vide ne consomme rien.
-- Trois jokers sont disponibles pour chacun sur les sept jours du 3 au 9 octobre. Un quatrième repas validé affiche un dépassement ; le bilan quotidien, le classement et le prix du karaoké restent inchangés.
+- Trois jokers sont disponibles pour chacun sur les six jours du 4 au 9 octobre. Le 3 octobre est un galop d’essai : ses repas et analyses sont conservés, mais aucune validation ne peut consommer de joker ; les jokers précédemment consommés pour cette date sont restitués au chargement du jardin commun. Un quatrième repas validé affiche un dépassement ; le bilan quotidien, le classement et le prix du karaoké restent inchangés.
 - Les anciennes versions signalées restent dans l’historique mais ne peuvent plus être validées. Une validation passée reste comptée si son repas est édité ou supprimé ; tu peux l’annuler explicitement.
 - Les repas déjà saisis avant activation se trouvent dans **Repas sans analyse terminée** et peuvent être analysés manuellement.
 

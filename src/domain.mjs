@@ -33,6 +33,12 @@ export function assertMeal(meal, startDate, today = todayISO()) {
   assertEntry({ participantId: meal.participantId, day: meal.day, status: 'success' }, startDate, today);
 }
 export const CHALLENGE_START = '2026-10-03';
+// Storage keeps October 3 as day 0, so existing meals/results never change date.
+export const OFFICIAL_START = '2026-10-04';
+export function scoreOffset(state) { return state.startDate === CHALLENGE_START ? 1 : 0; }
+export function challengeDays(state) { return DAYS - scoreOffset(state); }
+export function officialStart(state) { return addDays(state.startDate, scoreOffset(state)); }
+export function isTrialDay(state, day) { return day < scoreOffset(state); }
 export function todayISO(date = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
@@ -79,7 +85,7 @@ export function assertVote(personId, vote, startDate, today = todayISO()) {
 }
 export function challengePhase(state, today = todayISO()) {
   const index = dayIndex(state.startDate, today);
-  return index < 0 ? 'preparing' : index < DAYS - 1 ? 'active' : index === DAYS - 1 ? 'final' : 'finished';
+  return index < scoreOffset(state) ? 'preparing' : index < DAYS - 1 ? 'active' : index === DAYS - 1 ? 'final' : 'finished';
 }
 export function voteSummary(state) {
   const votes = PEOPLE.map(person => state?.votes?.[person.id]).filter(vote => ['yes', 'no'].includes(vote));
@@ -114,15 +120,17 @@ export function cleanState(raw) {
 export function personStats(state, id, today = todayISO()) {
   const index = dayIndex(state.startDate, today);
   const statuses = Array.from({ length: DAYS }, (_, day) => day <= index ? state.entries[entryKey(id, day)]?.status || null : null);
-  const successes = statuses.filter(status => status === 'success').length;
-  const failures = statuses.filter(status => status === 'failure').length;
+  const offset = scoreOffset(state);
+  const scored = statuses.slice(offset);
+  const successes = scored.filter(status => status === 'success').length;
+  const failures = scored.filter(status => status === 'failure').length;
   let best = 0, run = 0;
-  for (const status of statuses) { run = status === 'success' ? run + 1 : 0; best = Math.max(best, run); }
+  for (const status of scored) { run = status === 'success' ? run + 1 : 0; best = Math.max(best, run); }
   let anchor = Math.min(index, DAYS - 1);
   if (anchor >= 0 && statuses[anchor] === null) anchor--;
   let streak = 0;
-  for (let day = anchor; day >= 0 && statuses[day] === 'success'; day--) streak++;
-  const last = statuses.filter(Boolean).at(-1);
+  for (let day = anchor; day >= offset && statuses[day] === 'success'; day--) streak++;
+  const last = scored.filter(Boolean).at(-1);
   return { statuses, successes, failures, best, streak, recorded: successes + failures, mood: last === 'success' ? 'happy' : last === 'failure' ? 'sad' : 'neutral' };
 }
 export function ranking(state, today = todayISO()) {
@@ -142,8 +150,8 @@ export function karaokeShares(state, today = todayISO()) {
     cents: baseCents + 200 * (totalSuccesses / PEOPLE.length - person.successes),
   }));
   return {
-    shares, recorded, remaining: PEOPLE.length * DAYS - recorded,
-    final: dayIndex(state.startDate, today) >= DAYS && recorded === PEOPLE.length * DAYS,
+    shares, recorded, remaining: PEOPLE.length * challengeDays(state) - recorded,
+    final: dayIndex(state.startDate, today) >= DAYS && recorded === PEOPLE.length * challengeDays(state),
     totalCents: KARAOKE_TOTAL_CENTS,
   };
 }

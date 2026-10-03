@@ -122,3 +122,7 @@ Ces commandes utilisent les outils intégrés à Node.js pour vérifier les fich
 À partir du 3 octobre, pour valider le partage des bilans sur vos téléphones, ouvrir le même lien d'invitation dans deux navigateurs, enregistrer le résultat réel du jour dans le premier et vérifier son apparition dans le second. Recharger les deux pages pour confirmer la sauvegarde, puis essayer une correction de résultat si nécessaire.
 
 Changer aussi la couleur d'un profil dans les paramètres et vérifier qu'elle se met à jour dans l'autre navigateur, sur les profils et dans le classement, puis qu'elle reste après rechargement. Les anciennes sauvegardes locales sans couleurs personnalisées restent compatibles.
+
+## Calendrier révisé
+
+Le 3 octobre 2026 est un galop d’essai. Les données conservent leur date et leur identifiant (`day: 0`), mais sont exclues du classement, des séries, de l’état des mascottes, du karaoké et des jokers. Les six journées officielles vont du 4 au 9 octobre (`day: 1` à `6`), pour 24 bilans de groupe. Le vote reste le 9 et la sortie le 10. Une migration privée restitue une fois les jokers validés pour l’essai, sans effacer l’historique des analyses.

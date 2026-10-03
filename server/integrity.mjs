@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { validMeal, mealKey, PEOPLE } from '../src/domain.mjs';
+import { validMeal, mealKey, PEOPLE, CHALLENGE_START, isTrialDay } from '../src/domain.mjs';
 
 export const MODEL = 'gpt-6-luna';
 export const JOKERS = 3;
@@ -118,6 +118,8 @@ export function createIntegrityService({ db, analyze = analyzeText, clock = () =
       const review = snapshot.data();
       if (!review || review.status !== 'done' || !['flagged', 'uncertain'].includes(review.verdict)
         || !PEOPLE.some(person => person.id === review.participantId)) fail('Cette alerte ne peut pas être validée.', 404);
+      const roomData = (await tx.get(db.doc(`rooms/${room}`))).data();
+      if (decision === 'accepted' && roomData?.startDate === CHALLENGE_START && isTrialDay(roomData, review.day)) fail('Galop d’essai : ce repas ne consomme aucun joker.', 409);
       const meal = await tx.get(ref(room, 'meals', review.mealId));
       const ledgerRef = ref(room, 'jokerLedger', review.mealId);
       const ledger = (await tx.get(ledgerRef)).data();

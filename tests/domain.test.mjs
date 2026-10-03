@@ -351,7 +351,7 @@ test('unused backups move to the agreed start date without losing custom mascot 
 test('preparation, active challenge, final day and finished week use Paris calendar dates', () => {
   const state = emptyState();
   for (const [day, phase] of [
-    ['2026-10-02', 'preparing'], ['2026-10-03', 'active'], ['2026-10-08', 'active'],
+    ['2026-10-02', 'preparing'], ['2026-10-03', 'preparing'], ['2026-10-04', 'active'], ['2026-10-08', 'active'],
     ['2026-10-09', 'final'], ['2026-10-10', 'finished'],
   ]) assert.equal(challengePhase(state, day), phase);
   assert.equal(challengePhase(state, todayISO(new Date('2026-10-08T21:59:59Z'))), 'active');
