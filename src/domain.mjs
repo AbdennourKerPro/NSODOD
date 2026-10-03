@@ -15,6 +15,23 @@ export const PEOPLE = Object.freeze([
   { id: 'meriem', name: 'Meriem', plant: 'Poppy', color: 'pink', emoji: '🌷' },
 ]);
 export const DAYS = 7;
+export const MEAL_TYPES = Object.freeze([
+  { id: 'breakfast', label: 'Petit-déjeuner', emoji: '☀️' },
+  { id: 'lunch', label: 'Déjeuner', emoji: '🥗' },
+  { id: 'dinner', label: 'Dîner', emoji: '🌙' },
+  { id: 'snack', label: 'Collations', emoji: '🍎' },
+]);
+export function mealKey(personId, day, type) { return `${personId}_${day}_${type}`; }
+export function validMeal(meal) {
+  return Boolean(meal && PEOPLE.some(person => person.id === meal.participantId)
+    && Number.isInteger(meal.day) && meal.day >= 0 && meal.day < DAYS
+    && MEAL_TYPES.some(type => type.id === meal.type)
+    && typeof meal.text === 'string' && meal.text.trim().length > 0 && meal.text.length <= 2000);
+}
+export function assertMeal(meal, startDate, today = todayISO()) {
+  if (!validMeal(meal)) throw new Error('Décris ton repas en 1 à 2 000 caractères.');
+  assertEntry({ participantId: meal.participantId, day: meal.day, status: 'success' }, startDate, today);
+}
 export const CHALLENGE_START = '2026-10-03';
 export function todayISO(date = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -71,7 +88,7 @@ export function voteSummary(state) {
   const complete = votes.length === PEOPLE.length;
   return { yes, no, total: votes.length, remaining: PEOPLE.length - votes.length, complete, decision: complete ? yes > no ? 'extend' : no > yes ? 'stop' : 'tie' : null };
 }
-export function emptyState(startDate = CHALLENGE_START) { return { version: 1, startDate, entries: {}, profiles: {}, votes: {} }; }
+export function emptyState(startDate = CHALLENGE_START) { return { version: 1, startDate, entries: {}, profiles: {}, votes: {}, meals: {} }; }
 export function cleanState(raw) {
   if (!raw || raw.version !== 1 || !isDate(raw.startDate)) return null;
   const state = emptyState(raw.startDate);
@@ -84,8 +101,13 @@ export function cleanState(raw) {
   for (const [personId, vote] of Object.entries(raw.votes || {})) {
     if (validVote(personId, vote)) state.votes[personId] = vote;
   }
+  for (const meal of Object.values(raw.meals || {})) {
+    if (validMeal(meal)) state.meals[mealKey(meal.participantId, meal.day, meal.type)] = {
+      participantId: meal.participantId, day: meal.day, type: meal.type, text: meal.text.trim(),
+    };
+  }
   // An unused local garden can follow the agreed date without changing past results.
-  if (!Object.keys(state.entries).length && !Object.keys(state.votes).length) state.startDate = CHALLENGE_START;
+  if (!Object.keys(state.entries).length && !Object.keys(state.votes).length && !Object.keys(state.meals).length) state.startDate = CHALLENGE_START;
   return state;
 }
 export function personStats(state, id, today = todayISO()) {

@@ -1,4 +1,4 @@
-import { PEOPLE, COLORS, DAYS, CHALLENGE_START, addDays, challengePhase, dateLabel, dayIndex, emptyState, entryKey, karaokeShares, personStats, profileColor, ranking, todayISO, voteSummary } from './domain.mjs';
+import { PEOPLE, COLORS, DAYS, MEAL_TYPES, CHALLENGE_START, addDays, challengePhase, dateLabel, dayIndex, emptyState, entryKey, karaokeShares, mealKey, personStats, profileColor, ranking, todayISO, voteSummary } from './domain.mjs';
 import { cloudConfigured, createStore, preference } from './store.mjs';
 
 const root = document.querySelector('#app');
@@ -16,6 +16,8 @@ let lastToday = todayISO();
 let homeRulesOpen = false;
 let colorDraft = null;
 let settingsBusy = false;
+let mealBusy = false;
+let mealDraft = null;
 const celebrationDate = addDays(CHALLENGE_START, DAYS);
 
 const paths = {
@@ -146,6 +148,38 @@ function leaderboard() {
   const total = rows.reduce((sum, person) => sum + person.successes, 0);
   return `<section class="leaderboard panel" aria-labelledby="leaderboard-title"><div class="card-heading"><div><span class="eyebrow">LA FORCE DU COLLECTIF</span><h2 id="leaderboard-title">Le jardin des complices ${icon('trophy')}</h2></div><span class="group-total">${icon('sprout')}<strong>${total}</strong> / 28 victoires ensemble</span></div><div class="leaderboard-head"><span>COMPLICE</span><span>LA SEMAINE</span><span>JOURS RÉUSSIS</span></div><ol class="ranking-list">${rows.map(person => `<li class="rank-row ${person.id === selected.id ? 'is-you' : ''}"><span class="rank-number ${person.rank === 1 && person.successes ? 'first' : ''}">${person.rank || '—'}</span><span class="rank-avatar ${profileColor(state, person.id)}">${mascot(person, person.mood)}</span><div class="rank-person"><strong>${person.name}${person.id === selected.id ? '<span class="you-badge">Toi</span>' : ''}</strong><span>${person.mood === 'happy' ? `${person.plant} rayonne` : person.mood === 'sad' ? `${person.plant} reprend son souffle` : `${person.plant} attend sa première pousse`}${person.streak > 1 ? ` <span class="streak-inline">· ${person.streak} de suite ${icon('fire')}</span>` : ''}</span></div><div class="mini-week" aria-label="Semaine de ${person.name}">${person.statuses.map((status, day) => `<span class="mini-day ${status || ''} ${day > dayIndex(state.startDate) ? 'future' : ''}" title="Jour ${day + 1} : ${status === 'success' ? 'réussi' : status === 'failure' ? 'craqué' : 'sans bilan'}">${status === 'success' ? icon('check') : status === 'failure' ? '<span>·</span>' : ''}</span>`).join('')}</div><div class="rank-score"><strong>${person.successes}<span>/ 7</span></strong></div></li>`).join('')}</ol><div class="leaderboard-foot"><span><i class="legend-success"></i>Réussi <i class="legend-failure"></i>Craqué <i class="legend-empty"></i>Pas encore de bilan</span><span>À égalité ? Même place, même fierté.</span></div></section>`;
 }
+function mealsCard() {
+  const index = dayIndex(state.startDate);
+  const disabled = busy || !store || ['connecting', 'offline', 'pending', 'error'].includes(connection) || activeDay > index;
+  return `<section class="meal-journal panel" aria-labelledby="meals-title"><div class="card-heading"><div><span class="eyebrow">DANS MON ASSIETTE</span><h2 id="meals-title">Le carnet de ${selected.name}</h2></div><span class="journal-date">${dateLabel(addDays(state.startDate, activeDay), { weekday: 'short' })}</span></div>
+    <p class="journal-intro">Raconte tes repas avec tes mots : plats, boissons, encas… Pas besoin de compter les calories.</p>
+    <div class="journal-days" role="group" aria-label="Jour du carnet">${Array.from({ length: DAYS }, (_, day) => `<button data-action="day" data-day="${day}" aria-pressed="${day === activeDay}" ${day > index ? 'disabled' : ''}>${dateLabel(addDays(state.startDate, day), { day: 'numeric', month: undefined })} oct</button>`).join('')}</div>
+    <div class="meal-grid">${MEAL_TYPES.map(type => {
+      const meal = state.meals?.[mealKey(selected.id, activeDay, type.id)];
+      return `<article class="meal-note ${meal ? 'has-meal' : ''}"><h3><span aria-hidden="true">${type.emoji}</span> ${type.label}</h3>${meal ? `<p class="meal-text">${escape(meal.text)}</p>` : '<p class="meal-empty">Ton assiette attend son histoire.</p>'}<button class="text-button" data-action="edit-meal" data-type="${type.id}" ${disabled ? 'disabled' : ''}>${meal ? 'Modifier' : '+ Raconter'}</button></article>`;
+    }).join('')}</div>
+    <p class="journal-foot">${index < 0 ? 'Le carnet ouvre le 3 octobre. ' : ''}Ces notes sont partagées dans votre jardin. Elles ne valident pas automatiquement la journée : garde ton bilan « tenu bon » ou « craqué ».</p>
+  </section>`;
+}
+function mealDialog(typeId) {
+  const type = MEAL_TYPES.find(item => item.id === typeId);
+  if (!type || !selected) return;
+  const meal = state.meals?.[mealKey(selected.id, activeDay, typeId)];
+  mealDraft = { participantId: selected.id, day: activeDay, type: typeId };
+  openDialog(`<h2>${type.emoji} ${type.label}</h2><p>${escape(selected.name)} · ${dateLabel(addDays(state.startDate, activeDay), { weekday: 'long' })}</p><form id="meal-form"><label class="meal-label" for="meal-text">Qu’as-tu mangé et bu ?</label><textarea id="meal-text" name="text" rows="7" required maxlength="2000" placeholder="Par exemple : pâtes aux légumes, yaourt nature et eau. Une pomme dans l’après-midi.">${escape(meal?.text || '')}</textarea><p class="meal-help">Texte libre · 2 000 caractères maximum. Pour les collations, tu peux noter plusieurs encas.</p><div id="meal-error" role="alert"></div><div class="dialog-buttons"><button type="button" class="outline-button" data-action="close-dialog">Annuler</button><button type="submit" class="solid-button">Enregistrer</button></div>${meal ? '<button type="button" class="meal-delete" data-action="delete-meal">Supprimer cette note</button>' : ''}</form>`, 'meal');
+}
+async function submitMeal(event) {
+  if (event.target.id !== 'meal-form') return;
+  event.preventDefault();
+  if (mealBusy || !mealDraft || !store) return;
+  const text = dialog.querySelector('#meal-text').value.trim();
+  if (!text) { dialog.querySelector('#meal-error').textContent = 'Écris quelques mots sur ton repas.'; return; }
+  mealBusy = true;
+  dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = true; });
+  try { await store.saveMeal({ ...mealDraft, text }); dialog.close(); toast('Ton repas est noté dans le carnet.'); }
+  catch (error) { dialog.querySelector('#meal-error').textContent = friendlyError(error); }
+  finally { mealBusy = false; dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = false; }); }
+}
 function money(cents) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100);
 }
@@ -177,7 +211,7 @@ function dashboard() {
   const stats = personStats(state, selected.id);
   const range = `${dateLabel(state.startDate)} — ${dateLabel(addDays(state.startDate, 6), { year: 'numeric' })}`;
   const dayText = index < 0 ? `Départ le ${dateLabel(state.startDate, { day: 'numeric', month: 'long' })}` : index >= DAYS ? 'Semaine terminée' : `Jour ${index + 1} sur 7`;
-  return `${header()}<main id="main" class="dashboard-main"><section class="dashboard-title"><div><div class="title-eyebrow"><span class="eyebrow">BIENVENUE DANS TON PETIT JARDIN</span>${badge()}</div><h1>Salut, ${selected.name}<span class="greeting-sun">${icon('sun')}</span></h1><p>Chaque jour sans sucre, c’est une nouvelle pousse.</p></div><div class="challenge-date"><span>${icon('calendar')}${range}</span><strong><span class="small-dot"></span>${dayText}</strong></div></section>${['offline', 'pending', 'error'].includes(connection) ? `<div class="connection-banner" role="status">${icon('info')}${connection === 'error' ? 'La connexion au jardin est interrompue. Recharge cette page pour réessayer.' : connection === 'pending' ? 'Ta modification attend sa confirmation. Garde cette page ouverte pendant l’envoi.' : 'Le jardin partagé est momentanément hors connexion. Les bilans seront disponibles quand la connexion reviendra.'}${connection === 'error' ? '<button class="outline-button" data-action="retry">Réessayer</button>' : ''}</div>` : ''}<section class="stats-grid" aria-label="Ton bilan de la semaine"><div class="stat-card"><span class="stat-icon stat-green">${icon('sprout')}</span><div><span>Jours réussis</span><strong>${stats.successes}<small> / 7</small></strong></div><span class="stat-caption">${stats.successes ? 'Bien joué !' : 'Tout peut pousser'}</span></div><div class="stat-card"><span class="stat-icon stat-orange">${icon('fire')}</span><div><span>Série en cours</span><strong>${stats.streak}<small> ${stats.streak > 1 ? 'jours' : 'jour'}</small></strong></div><span class="stat-caption">${stats.streak > 1 ? 'Ça pousse fort' : 'Une pousse à la fois'}</span></div><div class="stat-card"><span class="stat-icon stat-purple">${icon('trophy')}</span><div><span>Ta place au jardin</span><strong>${ranking(state).find(person => person.id === selected.id).rank ? '#' + ranking(state).find(person => person.id === selected.id).rank : '—'}<small> / 4</small></strong></div><span class="stat-caption">${Object.keys(state.entries).length ? 'Ensemble, on avance' : 'Le défi commence'}</span></div></section><div class="dashboard-grid">${selectedDayCard(stats, index)}${plantCard(stats)}</div>${extensionVote()}${leaderboard()}${karaokeCard()}<div class="kind-note">${icon('heart')}<p><strong>Une journée ratée n’est pas un défi raté.</strong> Tes victoires restent, ta plante t’attend. On continue ensemble.</p><span>✳</span></div></main>${footer()}`;
+  return `${header()}<main id="main" class="dashboard-main"><section class="dashboard-title"><div><div class="title-eyebrow"><span class="eyebrow">BIENVENUE DANS TON PETIT JARDIN</span>${badge()}</div><h1>Salut, ${selected.name}<span class="greeting-sun">${icon('sun')}</span></h1><p>Chaque jour sans sucre, c’est une nouvelle pousse.</p></div><div class="challenge-date"><span>${icon('calendar')}${range}</span><strong><span class="small-dot"></span>${dayText}</strong></div></section>${['offline', 'pending', 'error'].includes(connection) ? `<div class="connection-banner" role="status">${icon('info')}${connection === 'error' ? 'La connexion au jardin est interrompue. Recharge cette page pour réessayer.' : connection === 'pending' ? 'Ta modification attend sa confirmation. Garde cette page ouverte pendant l’envoi.' : 'Le jardin partagé est momentanément hors connexion. Les bilans seront disponibles quand la connexion reviendra.'}${connection === 'error' ? '<button class="outline-button" data-action="retry">Réessayer</button>' : ''}</div>` : ''}<section class="stats-grid" aria-label="Ton bilan de la semaine"><div class="stat-card"><span class="stat-icon stat-green">${icon('sprout')}</span><div><span>Jours réussis</span><strong>${stats.successes}<small> / 7</small></strong></div><span class="stat-caption">${stats.successes ? 'Bien joué !' : 'Tout peut pousser'}</span></div><div class="stat-card"><span class="stat-icon stat-orange">${icon('fire')}</span><div><span>Série en cours</span><strong>${stats.streak}<small> ${stats.streak > 1 ? 'jours' : 'jour'}</small></strong></div><span class="stat-caption">${stats.streak > 1 ? 'Ça pousse fort' : 'Une pousse à la fois'}</span></div><div class="stat-card"><span class="stat-icon stat-purple">${icon('trophy')}</span><div><span>Ta place au jardin</span><strong>${ranking(state).find(person => person.id === selected.id).rank ? '#' + ranking(state).find(person => person.id === selected.id).rank : '—'}<small> / 4</small></strong></div><span class="stat-caption">${Object.keys(state.entries).length ? 'Ensemble, on avance' : 'Le défi commence'}</span></div></section><div class="dashboard-grid">${selectedDayCard(stats, index)}${plantCard(stats)}</div>${mealsCard()}${extensionVote()}${leaderboard()}${karaokeCard()}<div class="kind-note">${icon('heart')}<p><strong>Une journée ratée n’est pas un défi raté.</strong> Tes victoires restent, ta plante t’attend. On continue ensemble.</p><span>✳</span></div></main>${footer()}`;
 }
 function rulesPage() {
   return `${header()}<main id="main" class="rules-main"><h1>Les règles du défi</h1>${challengeRules(false)}<section class="start-settings panel"><div><h2>Du ${dateLabel(state.startDate, { day: 'numeric', month: 'long' })} au ${dateLabel(addDays(state.startDate, DAYS - 1), { day: 'numeric', month: 'long', year: 'numeric' })}</h2><p>Les bilans s’ouvrent le premier jour. Le dernier jour, chacun peut voter pour prolonger le défi ou s’arrêter ici.</p></div></section><button class="solid-button back-garden" data-action="navigate" data-page="dashboard">${icon('sprout')} Retour au jardin</button></main>${footer()}`;
@@ -269,6 +303,16 @@ async function onAction(event) {
   const button = event.target.closest('[data-action]');
   if (!button || button.disabled) return;
   switch (button.dataset.action) {
+    case 'edit-meal': mealDialog(button.dataset.type); break;
+    case 'delete-meal': {
+      if (mealBusy || !mealDraft || !store) return;
+      mealBusy = true;
+      dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = true; });
+      try { await store.removeMeal(mealDraft.participantId, mealDraft.day, mealDraft.type); dialog.close(); toast('La note a été supprimée.'); }
+      catch (error) { dialog.querySelector('#meal-error').textContent = friendlyError(error); }
+      finally { mealBusy = false; dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = false; }); }
+      break;
+    }
     case 'karaoke': {
       const title = document.querySelector('#karaoke-title');
       title?.setAttribute('tabindex', '-1');
@@ -314,7 +358,7 @@ async function onAction(event) {
       break;
     }
     case 'invite': inviteDialog(); break;
-    case 'close-dialog': if (!settingsBusy) dialog.close(); break;
+    case 'close-dialog': if (!settingsBusy && !mealBusy) dialog.close(); break;
     case 'record': await record(button.dataset.status); break;
     case 'vote': {
       if (busy || !store || !selected || !['final', 'finished'].includes(challengePhase(state))) return;
@@ -350,10 +394,11 @@ document.querySelector('.skip-link').addEventListener('click', event => {
   main?.focus();
 });
 dialog.addEventListener('click', event => {
-  if (event.target === dialog && !settingsBusy) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); }
+  if (event.target === dialog && !settingsBusy && !mealBusy) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); }
   else onAction(event);
 });
-dialog.addEventListener('cancel', event => { if (settingsBusy) event.preventDefault(); });
+dialog.addEventListener('submit', submitMeal);
+dialog.addEventListener('cancel', event => { if (settingsBusy || mealBusy) event.preventDefault(); });
 window.addEventListener('online', () => { if (store?.mode === 'shared') { connection = 'connecting'; render(); } });
 window.addEventListener('offline', () => { if (store?.mode === 'shared') { connection = 'offline'; render(); } });
 function updateDay() {

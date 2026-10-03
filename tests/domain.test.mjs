@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CHALLENGE_START, COLORS, PEOPLE, addDays, assertEntry, assertVote, challengePhase, cleanState, dayIndex, emptyState,
-  entryKey, isDate, isRoomId, karaokeShares, newRoomId, personStats, profileColor, ranking, todayISO, validProfile, validVote, voteSummary,
+  assertMeal, entryKey, isDate, isRoomId, karaokeShares, mealKey, newRoomId, personStats, profileColor, ranking, todayISO, validMeal, validProfile, validVote, voteSummary,
 } from '../src/domain.mjs';
 
 function garden(startDate, results) {
@@ -19,6 +19,19 @@ function karaokeGarden(scores) {
   return garden(CHALLENGE_START, Object.fromEntries(PEOPLE.map((person, index) => [person.id,
     Array.from({ length: 7 }, (_, day) => day < scores[index] ? 'success' : 'failure')])));
 }
+test('meal notes validate free text, type, profile, length and calendar', () => {
+  const meal = { participantId: 'abdennour', day: 0, type: 'lunch', text: 'Pâtes aux légumes\nEau' };
+  assert.equal(validMeal(meal), true);
+  assert.doesNotThrow(() => assertMeal(meal, CHALLENGE_START, '2026-10-03'));
+  assert.throws(() => assertMeal(meal, CHALLENGE_START, '2026-10-02'), /commencé/);
+  for (const change of [{ text: '  \n' }, { text: 'a'.repeat(2001) }, { type: 'unknown' }, { participantId: 'unknown' }, { day: 7 }]) {
+    assert.equal(validMeal({ ...meal, ...change }), false);
+  }
+  const raw = emptyState();
+  raw.meals.wrongKey = { ...meal, text: '  Pâtes  ', analysis: 'untrusted' };
+  raw.meals.invalid = { ...meal, text: '' };
+  assert.deepEqual(cleanState(raw).meals, { abdennour_0_lunch: { ...meal, text: 'Pâtes' } });
+});
 
 test('karaoke example splits 72 euros into 12, 16, 20 and 24 euros', () => {
   const bill = karaokeShares(karaokeGarden([7, 5, 3, 1]), '2026-10-10');
@@ -228,6 +241,7 @@ test('sanitization rebuilds safe entry keys and discards unknown or malformed da
     entries: { sherine_0: { participantId: 'sherine', day: 0, status: 'success' } },
     profiles: {},
     votes: {},
+    meals: {},
   });
   assert.equal(raw.entries.arbitrary.html, '<script>bad</script>');
   raw.entries.arbitrary.status = 'failure';
@@ -419,12 +433,21 @@ test('local stores keep each vote, corrections, results and preferences across r
     await second.setVote('isabelle', 'no');
     await first.setVote('abdennour', 'no');
     await first.setColor('meriem', 'royal');
+    await first.saveMeal({ participantId: 'abdennour', day: 0, type: 'lunch', text: '  Riz et légumes\nEau  ' });
+    await second.saveMeal({ participantId: 'isabelle', day: 0, type: 'dinner', text: 'Soupe' });
+    await first.saveMeal({ participantId: 'abdennour', day: 0, type: 'lunch', text: 'Pâtes et légumes' });
     const reloaded = await createStore(next => { state = next; }, () => {}, {});
     stores.push(reloaded);
     assert.deepEqual(state.votes, { abdennour: 'no', isabelle: 'no' });
     assert.equal(state.entries.isabelle_0.status, 'success');
     assert.equal(profileColor(state, 'isabelle'), 'orange');
     assert.equal(profileColor(state, 'meriem'), 'royal');
+    assert.equal(state.meals[mealKey('abdennour', 0, 'lunch')].text, 'Pâtes et légumes');
+    assert.equal(state.meals[mealKey('isabelle', 0, 'dinner')].text, 'Soupe');
+    await reloaded.removeMeal('abdennour', 0, 'lunch');
+    assert.equal(state.meals[mealKey('abdennour', 0, 'lunch')], undefined);
+    assert.equal(state.entries.isabelle_0.status, 'success');
+    await assert.rejects(reloaded.saveMeal({ participantId: 'abdennour', day: 0, type: 'lunch', text: ' ' }));
     await assert.rejects(reloaded.setVote('meriem', 'invalid'), /valide/);
     const unchanged = JSON.parse(stored.get('nsodod.garden.v1'));
     assert.deepEqual(unchanged.votes, state.votes);

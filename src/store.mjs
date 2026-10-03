@@ -1,5 +1,5 @@
 import { firebaseConfig } from '../firebase-config.js';
-import { CHALLENGE_START, assertEntry, assertVote, cleanState, emptyState, entryKey, isDate, isRoomId, newRoomId, validEntry, validProfile, validVote } from './domain.mjs';
+import { CHALLENGE_START, assertEntry, assertMeal, assertVote, cleanState, emptyState, entryKey, isDate, isRoomId, mealKey, newRoomId, validEntry, validMeal, validProfile, validVote } from './domain.mjs';
 
 const LOCAL_KEY = 'nsodod.garden.v1';
 const SDK = 'https://www.gstatic.com/firebasejs/12.19.0';
@@ -53,6 +53,19 @@ export async function createStore(onState, onConnection, config = firebaseConfig
     onState(local);
     return {
       mode: 'local',
+      async saveMeal(meal) {
+        const current = readLocal();
+        assertMeal(meal, current.startDate);
+        const value = { participantId: meal.participantId, day: meal.day, type: meal.type, text: meal.text.trim() };
+        persist({ ...current, meals: { ...current.meals, [mealKey(meal.participantId, meal.day, meal.type)]: value } });
+      },
+      async removeMeal(personId, day, type) {
+        const current = readLocal();
+        assertMeal({ participantId: personId, day, type, text: 'delete' }, current.startDate);
+        const meals = { ...current.meals };
+        delete meals[mealKey(personId, day, type)];
+        persist({ ...current, meals });
+      },
       async save(entry) {
         assertEntry(entry, local.startDate);
         // Re-read before each write so multiple tabs do not replace each other's entries.
@@ -72,6 +85,7 @@ export async function createStore(onState, onConnection, config = firebaseConfig
         const current = readLocal();
         if (Object.keys(current.entries).length) throw new Error('La date est fixée dès le premier résultat.');
         if (Object.keys(current.votes).length) throw new Error('La date est fixée dès le premier vote.');
+        if (Object.keys(current.meals).length) throw new Error('La date est fixée dès le premier repas.');
         if (startDate !== CHALLENGE_START) throw new Error('Le départ du défi est fixé au 3 octobre 2026.');
         persist({ ...current, startDate });
       },
@@ -119,23 +133,24 @@ export async function createStore(onState, onConnection, config = firebaseConfig
   let stopEntries = () => {};
   let stopProfiles = () => {};
   let stopVotes = () => {};
-  const flags = { entries: null, profiles: null, votes: null };
-  const errors = { entries: false, profiles: false, votes: false };
+  let stopMeals = () => {};
+  const flags = { entries: null, profiles: null, votes: null, meals: null };
+  const errors = { entries: false, profiles: false, votes: false, meals: false };
   const reportConnection = () => {
     const metadata = Object.values(flags).filter(Boolean);
     onConnection(Object.values(errors).some(Boolean) ? 'error'
       : metadata.some(item => item.hasPendingWrites) ? 'pending'
       : metadata.some(item => item.fromCache) ? 'offline'
-      : metadata.length === 3 ? 'shared' : 'connecting');
+      : metadata.length === 4 ? 'shared' : 'connecting');
   };
   await new Promise((resolve, reject) => {
     let initialized = false;
-    const timer = setTimeout(() => { stopEntries(); stopProfiles(); stopVotes(); reject(new Error('Le jardin met trop de temps à répondre. Vérifie ta connexion et réessaie.')); }, 12000);
+    const timer = setTimeout(() => { stopEntries(); stopProfiles(); stopVotes(); stopMeals(); reject(new Error('Le jardin met trop de temps à répondre. Vérifie ta connexion et réessaie.')); }, 12000);
     const received = (collection, snapshot) => {
       flags[collection] = { hasPendingWrites: snapshot.metadata.hasPendingWrites, fromCache: snapshot.metadata.fromCache };
       errors[collection] = false;
       reportConnection();
-      if (flags.entries && flags.profiles && flags.votes) {
+      if (flags.entries && flags.profiles && flags.votes && flags.meals) {
         onState(shared);
         if (!initialized) { initialized = true; clearTimeout(timer); resolve(); }
       }
@@ -143,7 +158,7 @@ export async function createStore(onState, onConnection, config = firebaseConfig
     const failed = (collection, error) => {
       errors[collection] = true;
       reportConnection();
-      if (!initialized) { clearTimeout(timer); stopEntries(); stopProfiles(); stopVotes(); reject(error); }
+      if (!initialized) { clearTimeout(timer); stopEntries(); stopProfiles(); stopVotes(); stopMeals(); reject(error); }
     };
     stopEntries = dbApi.onSnapshot(dbApi.collection(db, 'rooms', roomId, 'entries'), { includeMetadataChanges: true }, snapshot => {
       const entries = {};
@@ -172,9 +187,30 @@ export async function createStore(onState, onConnection, config = firebaseConfig
       shared = { ...shared, votes };
       received('votes', snapshot);
     }, error => failed('votes', error));
+    stopMeals = dbApi.onSnapshot(dbApi.collection(db, 'rooms', roomId, 'meals'), { includeMetadataChanges: true }, snapshot => {
+      const meals = {};
+      snapshot.forEach(document => {
+        const data = document.data();
+        const meal = { participantId: data.participantId, day: data.day, type: data.type, text: data.text };
+        if (validMeal(meal) && document.id === mealKey(meal.participantId, meal.day, meal.type)) meals[document.id] = meal;
+      });
+      shared = { ...shared, meals };
+      received('meals', snapshot);
+    }, error => failed('meals', error));
   });
   return {
     mode: 'shared', inviteURL: inviteURL.href,
+    async saveMeal(meal) {
+      assertMeal(meal, shared.startDate);
+      if (!navigator.onLine) throw new Error('Reconnecte-toi pour enregistrer ton repas.');
+      const value = { participantId: meal.participantId, day: meal.day, type: meal.type, text: meal.text.trim() };
+      await confirmedWrite(dbApi.setDoc(dbApi.doc(db, 'rooms', roomId, 'meals', mealKey(meal.participantId, meal.day, meal.type)), { ...value, updatedBy: user.uid, updatedAt: dbApi.serverTimestamp() }));
+    },
+    async removeMeal(personId, day, type) {
+      assertMeal({ participantId: personId, day, type, text: 'delete' }, shared.startDate);
+      if (!navigator.onLine) throw new Error('Reconnecte-toi pour modifier ton carnet.');
+      await confirmedWrite(dbApi.deleteDoc(dbApi.doc(db, 'rooms', roomId, 'meals', mealKey(personId, day, type))));
+    },
     async save(entry) {
       assertEntry(entry, shared.startDate);
       if (!navigator.onLine) throw new Error('Reconnecte-toi pour enregistrer ce résultat dans le jardin partagé.');
@@ -196,6 +232,6 @@ export async function createStore(onState, onConnection, config = firebaseConfig
       if (!navigator.onLine) throw new Error('Reconnecte-toi pour enregistrer ton vote dans le jardin partagé.');
       await confirmedWrite(dbApi.setDoc(dbApi.doc(db, 'rooms', roomId, 'votes', personId), { vote, updatedBy: user.uid, updatedAt: dbApi.serverTimestamp() }));
     },
-    destroy() { stopEntries(); stopProfiles(); stopVotes(); },
+    destroy() { stopEntries(); stopProfiles(); stopVotes(); stopMeals(); },
   };
 }

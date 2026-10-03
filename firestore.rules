@@ -53,6 +53,19 @@ service cloud.firestore {
         && data.updatedAt is timestamp
         && data.updatedAt == request.time;
     }
+    function validMeal(mealId) {
+      let data = request.resource.data;
+      return data.keys().hasAll(['participantId', 'day', 'type', 'text', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['participantId', 'day', 'type', 'text', 'updatedBy', 'updatedAt'])
+        && validParticipant(data.participantId)
+        && data.day is int && data.day >= 0 && data.day <= 6
+        && data.type in ['breakfast', 'lunch', 'dinner', 'snack']
+        && mealId == data.participantId + '_' + string(data.day) + '_' + data.type
+        && data.text is string && data.text.size() > 0 && data.text.size() <= 2000
+        && data.text.matches('[\\s\\S]*[^\\s][\\s\\S]*')
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt == request.time;
+    }
 
     function parisMidnight(date) {
       // EU clock changes fall on the last Sunday of March and October.
@@ -132,6 +145,12 @@ service cloud.firestore {
         allow read: if isMember(roomId);
         allow create, update: if isMember(roomId) && validProfile(participantId);
         allow delete: if false;
+      }
+      match /meals/{mealId} {
+        allow read: if isMember(roomId);
+        allow create, update: if isMember(roomId) && validMeal(mealId);
+        allow delete: if isMember(roomId)
+          && mealId.matches('(abdennour|isabelle|sherine|meriem)_[0-6]_(breakfast|lunch|dinner|snack)');
       }
 
       match /votes/{participantId} {

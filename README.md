@@ -104,6 +104,10 @@ La validation du calendrier et le blocage des jours futurs sont effectués par l
 
 ## Vérifier le projet
 
+Le carnet de repas propose une note libre (2 000 caractères maximum) par profil, jour du défi et type (`breakfast`, `lunch`, `dinner`, `snack`). Les notes peuvent être ajoutées, modifiées et supprimées, restent séparées des bilans et ne changent ni les scores ni les parts du karaoké. Elles sont partagées avec les membres du jardin, comme les autres données : les prénoms ne sont pas des comptes authentifiés individuels.
+
+Firestore : `rooms/{jardin}/meals/{prenom}_{jour}_{type}` contient `participantId`, `day`, `type`, `text`, `updatedBy`, `updatedAt`. La date du repas se déduit de `startDate + day`. Pour une future analyse LLM, garder la clé privée côté serveur et traiter `text` comme une entrée non fiable ; stocker les analyses séparément, liées à la version du texte, sans modifier automatiquement le bilan déclaré. Aucune analyse ni transmission à un LLM n'est activée dans cette version. Publier les règles `firestore.rules` avant de déployer le client qui lit la collection `meals`.
+
 La sortie karaoké du 10 octobre coûte 72 €. Le dashboard affiche quatre billets calculés depuis les bilans : `part = 18 € + 2 € × (moyenne des jours réussis − jours réussis de la personne)`. Les scores égaux paient la même part et le total reste exactement 72 € (parts entre 7,50 € et 28,50 €). Les montants restent provisoires jusqu'au 10 octobre et aux 28 bilans remplis ; seuls les sept jours initiaux comptent, même en cas de prolongation. Aucun paiement n'est déclenché et aucune nouvelle collection Firebase n'est nécessaire.
 
 ```sh
