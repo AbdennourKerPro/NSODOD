@@ -9,7 +9,7 @@ const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript
 http.createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    if (['/api/analyze', '/api/admin'].includes(pathname)) {
+    if (['/api/analyze', '/api/admin', '/api/garden'].includes(pathname)) {
       const { handler } = await import('../server/http.mjs');
       await handler(req, res, pathname.slice(5));
       return;

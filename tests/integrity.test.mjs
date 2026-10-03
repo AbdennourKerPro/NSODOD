@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { analyzeText, createIntegrityService, fingerprint, MODEL } from '../server/integrity.mjs';
 import { signSession, verifySession, sameSecret } from '../server/auth.mjs';
 import { sameOrigin, readBody, handler } from '../server/http.mjs';
+import { commonGarden, COMMON_GARDEN } from '../server/garden.mjs';
 
 class MemoryDb {
   data = new Map(); version = 0; queue = Promise.resolve();
@@ -30,6 +31,36 @@ const room = 'a'.repeat(32);
 const path = (collection, id) => `rooms/${room}/${collection}/${id}`;
 const flagged = { verdict: 'flagged', reason: 'Un soda sucré est décrit.', products: ['soda'] };
 const clear = { verdict: 'clear', reason: 'Aucun produit interdit décrit.', products: [] };
+
+test('group recovery reunites meals once, preserves originals and never overwrites newer notes', async () => {
+  const db = new MemoryDb();
+  const meriem = 'dd5df91e35d65b63faf41533fe2480f8';
+  const isabelle = '79d9e2081b87a4218f7f09c486e33089';
+  const at = (room, id) => `rooms/${room}/meals/${id}`;
+  db.write(`rooms/${COMMON_GARDEN}`, { startDate: '2026-10-03' });
+  const breakfast = { participantId: 'meriem', day: 0, type: 'breakfast', text: 'Compote sans sucres', updatedBy: 'original-user', updatedAt: { seconds: 100, nanoseconds: 0 } };
+  db.write(at(meriem, 'meriem_0_breakfast'), breakfast);
+  db.write(at(meriem, 'meriem_0_lunch'), { ...breakfast, type: 'lunch', text: 'Pizza' });
+  db.write(at(COMMON_GARDEN, 'meriem_0_lunch'), { ...breakfast, type: 'lunch', text: 'Texte corrigé' });
+  db.write(at(isabelle, 'isabelle_0_lunch'), { participantId: 'isabelle', day: 0, type: 'lunch', text: 'Fruit' });
+  db.write(at(meriem, 'abdennour_0_lunch'), { participantId: 'abdennour', day: 0, type: 'lunch', text: 'Une autre personne' });
+  await Promise.all([commonGarden(db), commonGarden(db)]);
+  assert.deepEqual(db.snapshot(at(COMMON_GARDEN, 'meriem_0_breakfast')).data(), breakfast);
+  assert.deepEqual(db.snapshot(at(meriem, 'meriem_0_breakfast')).data(), breakfast);
+  assert.equal(db.snapshot(at(COMMON_GARDEN, 'meriem_0_lunch')).data().text, 'Texte corrigé');
+  assert.equal(db.snapshot(at(COMMON_GARDEN, 'isabelle_0_lunch')).data().text, 'Fruit');
+  assert.equal(db.snapshot(at(COMMON_GARDEN, 'abdennour_0_lunch')).exists, false);
+  assert.equal(db.snapshot('gardenMigrations/shared-garden-v1').data().copied.length, 2);
+  db.data.delete(at(COMMON_GARDEN, 'meriem_0_breakfast'));
+  await commonGarden(db);
+  assert.equal(db.snapshot(at(COMMON_GARDEN, 'meriem_0_breakfast')).exists, false);
+});
+
+test('a missing common garden causes an explicit failure rather than a new empty garden', async () => {
+  const db = new MemoryDb();
+  await assert.rejects(commonGarden(db), /indisponible/);
+  assert.equal(db.data.size, 0);
+});
 function addMeal(db, id = 'abdennour_0_lunch', text = 'Un soda et des pâtes') {
   const [participantId, day, type] = id.split('_');
   db.write(path('meals', id), { participantId, day: Number(day), type, text });

@@ -1,4 +1,5 @@
 import { firebaseConfig } from '../firebase-config.js';
+import { sharedGarden } from './shared-garden.mjs';
 import { CHALLENGE_START, assertEntry, assertMeal, assertVote, cleanState, emptyState, entryKey, isDate, isRoomId, mealKey, newRoomId, validEntry, validMeal, validProfile, validVote } from './domain.mjs';
 
 const LOCAL_KEY = 'nsodod.garden.v1';
@@ -113,7 +114,12 @@ export async function createStore(onState, onConnection, config = firebaseConfig
   await auth.authStateReady();
   const user = auth.currentUser || (await authApi.signInAnonymously(auth)).user;
   const db = dbApi.getFirestore(app);
-  const roomId = requestedRoom || (isRoomId(remembered) ? remembered : newRoomId());
+  // Resolve one group garden independently of this browser's old link/preferences.
+  // Never silently create an empty replacement if the server cannot be reached.
+  let roomId;
+  if (config.projectId === 'nsod-od') {
+    roomId = await sharedGarden(user);
+  } else roomId = requestedRoom || (isRoomId(remembered) ? remembered : newRoomId());
   const roomRef = dbApi.doc(db, 'rooms', roomId);
   let roomSnap = await dbApi.getDoc(roomRef);
   if (!roomSnap.exists()) {

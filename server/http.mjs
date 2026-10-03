@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { createIntegrityService } from './integrity.mjs';
 import { COOKIE, sameSecret, signSession, verifySession } from './auth.mjs';
 import { isRoomId } from '../src/domain.mjs';
+import { commonGarden } from './garden.mjs';
 
 function fail(message, status) { throw Object.assign(new Error(message), { status }); }
 function backend() {
@@ -43,12 +44,16 @@ export async function handler(req, res, route, { backendFactory = backend } = {}
     if (req.method !== 'POST') fail('Méthode non autorisée.', 405);
     if (!sameOrigin(req)) fail('Origine de la requête refusée.', 403);
     const body = await readBody(req);
-    if (!isRoomId(body.roomId)) fail('Jardin invalide.', 400);
+    if (route !== 'garden' && !isRoomId(body.roomId)) fail('Jardin invalide.', 400);
     const { db, auth } = backendFactory();
     const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
     if (!token) fail('Connexion au jardin requise.', 401);
     let user;
     try { user = await auth.verifyIdToken(token); } catch { fail('Session expirée. Recharge la page.', 401); }
+    if (route === 'garden') {
+      const result = await commonGarden(db);
+      res.statusCode = 200; res.end(JSON.stringify(result)); return;
+    }
     if (!(await db.doc(`rooms/${body.roomId}/members/${user.uid}`).get()).exists) fail('Accès au jardin refusé.', 403);
     const service = createIntegrityService({ db });
     let result;

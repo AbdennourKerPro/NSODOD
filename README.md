@@ -50,15 +50,17 @@ Les étapes effectuées dans la console :
 5. Publication du contenu de [firestore.rules](./firestore.rules) dans **Firestore → Règles**.
 6. Enregistrement des identifiants publics de l'application dans [firebase-config.js](./firebase-config.js).
 
-Au lancement, le site crée ou rejoint un jardin partagé pour le défi du 3 au 9 octobre 2026. La date d'un jardin partagé est fixe pour tous les participants. Le bouton **Inviter mes complices** affiche une adresse finissant par `#jardin=...`. Envoyer **ce même lien** aux trois autres personnes : chacune choisira ensuite son prénom et rejoindra le même classement.
+Sur Vercel, le projet `nsod-od` rejoint toujours le jardin commun du groupe, résolu par `/api/garden`, indépendamment du navigateur, de l’ancien lien et des préférences locales. Chacun choisit simplement son prénom. Le bouton **Inviter mes complices** partage l’adresse de ce même jardin.
 
-La connexion anonyme et Firebase se lancent automatiquement lorsque la configuration est remplie. Sans lien d'invitation et sans jardin déjà mémorisé, un nouveau jardin est créé : pour rejoindre vos amis, utilisez leur lien.
+La connexion anonyme et Firebase se lancent automatiquement lorsque la configuration est remplie. Si le serveur du jardin commun ne répond pas, le site affiche une erreur et ne crée pas de jardin vide de remplacement. La récupération initiale copie les données validées de Meriem et d’Isabelle depuis leurs jardins précédents vers celui d’Abdennour, sans écraser de document existant. Les sources sont conservées et une trace privée `gardenMigrations/shared-garden-v1` empêche de recommencer la copie après une suppression volontaire.
 
 La configuration web Firebase est publique par conception. Elle peut figurer dans le dépôt ; les droits d'accès dépendent des règles Firestore. **Ne jamais placer une clé de compte de service ou une clé privée dans le site.** [Documentation des clés Firebase](https://firebase.google.com/docs/projects/api-keys)
 
 Le SDK Firebase est chargé depuis le CDN officiel, en version `12.19.0`, uniquement lorsque le partage est configuré. [Ajouter Firebase à une application web](https://firebase.google.com/docs/web/setup), [Authentification anonyme](https://firebase.google.com/docs/auth/web/anonymous-auth)
 
 ## Publier sur GitHub Pages
+
+**Historique : le site actuel utilise Vercel.** GitHub Pages seul ne peut pas exécuter `/api/garden`, l’analyse ou l’administration. Les instructions suivantes décrivent l’ancienne version statique.
 
 1. Mettre les fichiers du projet dans un dépôt GitHub et pousser la branche `main`.
 2. Ouvrir **Settings → Pages** dans le dépôt.

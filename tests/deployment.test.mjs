@@ -7,7 +7,7 @@ test('Vercel routes start without CommonJS require(ESM) support', () => {
   // Reproduces the production loader restriction that crashed jwks-rsa/jose.
   const script = `
     import assert from 'node:assert/strict';
-    for (const route of ['analyze', 'admin']) {
+    for (const route of ['analyze', 'admin', 'garden']) {
       const { default: handler } = await import('./api/' + route + '.js');
       let result;
       const response = { setHeader() {}, end(value) { result = JSON.parse(value); } };
