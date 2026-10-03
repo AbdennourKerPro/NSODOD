@@ -53,6 +53,7 @@ export async function createStore(onState, onConnection, config = firebaseConfig
     onState(local);
     return {
       mode: 'local',
+      async api() { throw new Error('L’analyse et l’espace administrateur nécessitent le jardin partagé et le serveur Vercel.'); },
       async saveMeal(meal) {
         const current = readLocal();
         assertMeal(meal, current.startDate);
@@ -134,23 +135,26 @@ export async function createStore(onState, onConnection, config = firebaseConfig
   let stopProfiles = () => {};
   let stopVotes = () => {};
   let stopMeals = () => {};
-  const flags = { entries: null, profiles: null, votes: null, meals: null };
-  const errors = { entries: false, profiles: false, votes: false, meals: false };
+  let stopCounts = () => {};
+  let stopAnalysis = () => {};
+  const stopAll = () => { stopEntries(); stopProfiles(); stopVotes(); stopMeals(); stopCounts(); stopAnalysis(); };
+  const flags = { entries: null, profiles: null, votes: null, meals: null, jokerCounts: null, analysisStates: null };
+  const errors = { entries: false, profiles: false, votes: false, meals: false, jokerCounts: false, analysisStates: false };
   const reportConnection = () => {
     const metadata = Object.values(flags).filter(Boolean);
     onConnection(Object.values(errors).some(Boolean) ? 'error'
       : metadata.some(item => item.hasPendingWrites) ? 'pending'
       : metadata.some(item => item.fromCache) ? 'offline'
-      : metadata.length === 4 ? 'shared' : 'connecting');
+      : metadata.length === 6 ? 'shared' : 'connecting');
   };
   await new Promise((resolve, reject) => {
     let initialized = false;
-    const timer = setTimeout(() => { stopEntries(); stopProfiles(); stopVotes(); stopMeals(); reject(new Error('Le jardin met trop de temps à répondre. Vérifie ta connexion et réessaie.')); }, 12000);
+    const timer = setTimeout(() => { stopAll(); reject(new Error('Le jardin met trop de temps à répondre. Vérifie ta connexion et réessaie.')); }, 12000);
     const received = (collection, snapshot) => {
       flags[collection] = { hasPendingWrites: snapshot.metadata.hasPendingWrites, fromCache: snapshot.metadata.fromCache };
       errors[collection] = false;
       reportConnection();
-      if (flags.entries && flags.profiles && flags.votes && flags.meals) {
+      if (Object.values(flags).every(Boolean)) {
         onState(shared);
         if (!initialized) { initialized = true; clearTimeout(timer); resolve(); }
       }
@@ -158,7 +162,7 @@ export async function createStore(onState, onConnection, config = firebaseConfig
     const failed = (collection, error) => {
       errors[collection] = true;
       reportConnection();
-      if (!initialized) { clearTimeout(timer); stopEntries(); stopProfiles(); stopVotes(); stopMeals(); reject(error); }
+      if (!initialized) { clearTimeout(timer); stopAll(); reject(error); }
     };
     stopEntries = dbApi.onSnapshot(dbApi.collection(db, 'rooms', roomId, 'entries'), { includeMetadataChanges: true }, snapshot => {
       const entries = {};
@@ -191,15 +195,44 @@ export async function createStore(onState, onConnection, config = firebaseConfig
       const meals = {};
       snapshot.forEach(document => {
         const data = document.data();
-        const meal = { participantId: data.participantId, day: data.day, type: data.type, text: data.text };
+        const meal = { participantId: data.participantId, day: data.day, type: data.type, text: data.text,
+          version: `${data.updatedAt?.seconds ?? ''}_${data.updatedAt?.nanoseconds ?? ''}` };
         if (validMeal(meal) && document.id === mealKey(meal.participantId, meal.day, meal.type)) meals[document.id] = meal;
       });
       shared = { ...shared, meals };
       received('meals', snapshot);
     }, error => failed('meals', error));
+    stopCounts = dbApi.onSnapshot(dbApi.collection(db, 'rooms', roomId, 'jokerCounts'), { includeMetadataChanges: true }, snapshot => {
+      const jokerCounts = {};
+      snapshot.forEach(document => {
+        const count = document.data().confirmed;
+        if (['abdennour', 'isabelle', 'sherine', 'meriem'].includes(document.id) && Number.isInteger(count) && count >= 0) jokerCounts[document.id] = { confirmed: count };
+      });
+      shared = { ...shared, jokerCounts }; received('jokerCounts', snapshot);
+    }, error => failed('jokerCounts', error));
+    stopAnalysis = dbApi.onSnapshot(dbApi.collection(db, 'rooms', roomId, 'analysisStates'), { includeMetadataChanges: true }, snapshot => {
+      const analysisStates = {};
+      snapshot.forEach(document => {
+        const data = document.data();
+        if (/^(abdennour|isabelle|sherine|meriem)_[0-6]_(breakfast|lunch|dinner|snack)$/.test(document.id)
+          && typeof data.mealVersion === 'string' && ['pending', 'done', 'error'].includes(data.status)) analysisStates[document.id] = { mealVersion: data.mealVersion, status: data.status };
+      });
+      shared = { ...shared, analysisStates }; received('analysisStates', snapshot);
+    }, error => failed('analysisStates', error));
   });
   return {
     mode: 'shared', inviteURL: inviteURL.href,
+    async api(path, payload = {}) {
+      if (!['analyze', 'admin'].includes(path)) throw new Error('Action serveur invalide.');
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/${path}`, { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...payload, roomId }), signal: AbortSignal.timeout(55000) });
+      let result;
+      try { result = await response.json(); } catch { throw new Error('Le serveur d’analyse est indisponible. Le repas est sauvegardé.'); }
+      if (!response.ok) { const error = new Error(result.error || 'Le serveur ne répond pas.'); error.status = response.status; throw error; }
+      return result;
+    },
     async saveMeal(meal) {
       assertMeal(meal, shared.startDate);
       if (!navigator.onLine) throw new Error('Reconnecte-toi pour enregistrer ton repas.');
@@ -232,6 +265,6 @@ export async function createStore(onState, onConnection, config = firebaseConfig
       if (!navigator.onLine) throw new Error('Reconnecte-toi pour enregistrer ton vote dans le jardin partagé.');
       await confirmedWrite(dbApi.setDoc(dbApi.doc(db, 'rooms', roomId, 'votes', personId), { vote, updatedBy: user.uid, updatedAt: dbApi.serverTimestamp() }));
     },
-    destroy() { stopEntries(); stopProfiles(); stopVotes(); stopMeals(); },
+    destroy() { stopAll(); },
   };
 }

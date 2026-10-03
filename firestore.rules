@@ -152,6 +152,18 @@ service cloud.firestore {
         allow delete: if isMember(roomId)
           && mealId.matches('(abdennour|isabelle|sherine|meriem)_[0-6]_(breakfast|lunch|dinner|snack)');
       }
+      // Only the server can produce analysis states and administrator-confirmed counts.
+      match /jokerCounts/{participantId} {
+        allow read: if isMember(roomId);
+        allow write: if false;
+      }
+      match /analysisStates/{mealId} {
+        allow read: if isMember(roomId);
+        allow write: if false;
+      }
+      match /mealChecks/{reviewId} { allow read, write: if false; }
+      match /jokerLedger/{mealId} { allow read, write: if false; }
+      match /serverLimits/{limitId} { allow read, write: if false; }
 
       match /votes/{participantId} {
         allow read: if isMember(roomId);

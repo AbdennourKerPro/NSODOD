@@ -5,9 +5,17 @@
   "type": "module",
   "description": "Le jardin du défi NoSugarOrDieOfDiabetes",
   "scripts": {
-    "dev": "node scripts/serve.mjs",
-    "start": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/serve.mjs",
+    "start": "node --env-file-if-exists=.env scripts/serve.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "node --check src/app.mjs && node --check src/store.mjs && node --check src/domain.mjs && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  },
+  "engines": { "node": ">=22" },
+  "overrides": {
+    "gaxios": { "uuid": "^11.1.1" }
   }
 }

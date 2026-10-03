@@ -242,6 +242,8 @@ test('sanitization rebuilds safe entry keys and discards unknown or malformed da
     profiles: {},
     votes: {},
     meals: {},
+    jokerCounts: {},
+    analysisStates: {},
   });
   assert.equal(raw.entries.arbitrary.html, '<script>bad</script>');
   raw.entries.arbitrary.status = 'failure';

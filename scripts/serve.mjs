@@ -9,6 +9,13 @@ const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript
 http.createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (['/api/analyze', '/api/admin'].includes(pathname)) {
+      const { handler } = await import('../server/http.mjs');
+      await handler(req, res, pathname.slice(5));
+      return;
+    }
+    // Never serve environment files, credentials, dependencies or server sources.
+    if (!['/', '/index.html', '/firebase-config.js'].includes(pathname) && !/^\/(src|assets)\//.test(pathname)) throw new Error('forbidden');
     const segments = pathname.split('/');
     if (segments.some(segment => segment.startsWith('.') || segment.includes('\\'))) throw new Error('forbidden');
     let target = path.resolve(root, '.' + pathname);

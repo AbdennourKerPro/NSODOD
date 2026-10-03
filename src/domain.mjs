@@ -88,7 +88,7 @@ export function voteSummary(state) {
   const complete = votes.length === PEOPLE.length;
   return { yes, no, total: votes.length, remaining: PEOPLE.length - votes.length, complete, decision: complete ? yes > no ? 'extend' : no > yes ? 'stop' : 'tie' : null };
 }
-export function emptyState(startDate = CHALLENGE_START) { return { version: 1, startDate, entries: {}, profiles: {}, votes: {}, meals: {} }; }
+export function emptyState(startDate = CHALLENGE_START) { return { version: 1, startDate, entries: {}, profiles: {}, votes: {}, meals: {}, jokerCounts: {}, analysisStates: {} }; }
 export function cleanState(raw) {
   if (!raw || raw.version !== 1 || !isDate(raw.startDate)) return null;
   const state = emptyState(raw.startDate);
@@ -106,6 +106,7 @@ export function cleanState(raw) {
       participantId: meal.participantId, day: meal.day, type: meal.type, text: meal.text.trim(),
     };
   }
+  // Local backups cannot create administrator decisions. These are server-owned data.
   // An unused local garden can follow the agreed date without changing past results.
   if (!Object.keys(state.entries).length && !Object.keys(state.votes).length && !Object.keys(state.meals).length) state.startDate = CHALLENGE_START;
   return state;

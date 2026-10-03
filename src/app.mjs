@@ -18,6 +18,9 @@ let colorDraft = null;
 let settingsBusy = false;
 let mealBusy = false;
 let mealDraft = null;
+const pendingAnalyses = new Map();
+let adminBusy = false;
+let adminData = null;
 const celebrationDate = addDays(CHALLENGE_START, DAYS);
 
 const paths = {
@@ -153,12 +156,16 @@ function mealsCard() {
   const disabled = busy || !store || ['connecting', 'offline', 'pending', 'error'].includes(connection) || activeDay > index;
   return `<section class="meal-journal panel" aria-labelledby="meals-title"><div class="card-heading"><div><span class="eyebrow">DANS MON ASSIETTE</span><h2 id="meals-title">Le carnet de ${selected.name}</h2></div><span class="journal-date">${dateLabel(addDays(state.startDate, activeDay), { weekday: 'short' })}</span></div>
     <p class="journal-intro">Raconte tes repas avec tes mots : plats, boissons, encas… Pas besoin de compter les calories.</p>
+    ${jokerCard()}
     <div class="journal-days" role="group" aria-label="Jour du carnet">${Array.from({ length: DAYS }, (_, day) => `<button data-action="day" data-day="${day}" aria-pressed="${day === activeDay}" ${day > index ? 'disabled' : ''}>${dateLabel(addDays(state.startDate, day), { day: 'numeric', month: undefined })} oct</button>`).join('')}</div>
     <div class="meal-grid">${MEAL_TYPES.map(type => {
       const meal = state.meals?.[mealKey(selected.id, activeDay, type.id)];
-      return `<article class="meal-note ${meal ? 'has-meal' : ''}"><h3><span aria-hidden="true">${type.emoji}</span> ${type.label}</h3>${meal ? `<p class="meal-text">${escape(meal.text)}</p>` : '<p class="meal-empty">Ton assiette attend son histoire.</p>'}<button class="text-button" data-action="edit-meal" data-type="${type.id}" ${disabled ? 'disabled' : ''}>${meal ? 'Modifier' : '+ Raconter'}</button></article>`;
+      const id = mealKey(selected.id, activeDay, type.id);
+      const status = meal && state.analysisStates?.[id]?.mealVersion === meal.version ? state.analysisStates[id]?.status : null;
+      const analyzing = pendingAnalyses.has(id) || status === 'pending';
+      return `<article class="meal-note ${meal ? 'has-meal' : ''}"><h3><span aria-hidden="true">${type.emoji}</span> ${type.label}</h3>${meal ? `<p class="meal-text">${escape(meal.text)}</p><p class="analysis-caption">${analyzing ? '⏳ Analyse en cours…' : status === 'done' ? '✓ Analyse terminée · contrôle d’Abdennour' : status === 'error' ? 'Analyse indisponible · ton repas est sauvegardé' : 'Analyse à lancer'}</p>` : '<p class="meal-empty">Ton assiette attend son histoire.</p>'}<div class="meal-actions"><button class="text-button" data-action="edit-meal" data-type="${type.id}" ${disabled ? 'disabled' : ''}>${meal ? 'Modifier' : '+ Raconter'}</button>${meal && status !== 'done' ? `<button class="text-button" data-action="analyze-meal" data-meal="${id}" ${disabled || pendingAnalyses.has(id) ? 'disabled' : ''}>${analyzing ? 'Vérifier l’analyse' : 'Relancer l’analyse'}</button>` : ''}</div></article>`;
     }).join('')}</div>
-    <p class="journal-foot">${index < 0 ? 'Le carnet ouvre le 3 octobre. ' : ''}Ces notes sont partagées dans votre jardin. Elles ne valident pas automatiquement la journée : garde ton bilan « tenu bon » ou « craqué ».</p>
+    <p class="journal-foot">${index < 0 ? 'Le carnet ouvre le 3 octobre. ' : ''}Le texte est envoyé à GPT‑6 Luna après chaque ajout ou modification. Les alertes sont réservées à Abdennour : seule sa validation consomme un joker. Un repas vide ne compte pas. Ton bilan quotidien reste à renseigner toi-même.</p>
   </section>`;
 }
 function mealDialog(typeId) {
@@ -175,10 +182,62 @@ async function submitMeal(event) {
   const text = dialog.querySelector('#meal-text').value.trim();
   if (!text) { dialog.querySelector('#meal-error').textContent = 'Écris quelques mots sur ton repas.'; return; }
   mealBusy = true;
+  const saved = { ...mealDraft, text };
+  let success = false;
   dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = true; });
-  try { await store.saveMeal({ ...mealDraft, text }); dialog.close(); toast('Ton repas est noté dans le carnet.'); }
+  try { await store.saveMeal(saved); success = true; dialog.close(); toast('Ton repas est noté dans le carnet.'); }
   catch (error) { dialog.querySelector('#meal-error').textContent = friendlyError(error); }
   finally { mealBusy = false; dialog.querySelectorAll('button,textarea').forEach(item => { item.disabled = false; }); }
+  if (success) await requestAnalysis(mealKey(saved.participantId, saved.day, saved.type));
+}
+function jokerCard() {
+  return `<div class="joker-strip" aria-label="Jokers du défi">${PEOPLE.map(person => {
+    const count = state.jokerCounts?.[person.id]?.confirmed || 0;
+    return `<div class="joker-person ${person.id === selected.id ? 'is-you' : ''}"><strong>${person.name}</strong><span class="joker-dots" aria-hidden="true">${Array.from({ length: 3 }, (_, index) => `<i class="${index < count ? 'used' : ''}">✦</i>`).join('')}</span><small>${Math.min(count, 3)} / 3 utilisé${count > 1 ? 's' : ''}${count > 3 ? ` · ${count - 3} dépassement${count > 4 ? 's' : ''}` : ''}</small></div>`;
+  }).join('')}</div>${selected.id === 'abdennour' ? '<button class="admin-entry" data-action="admin-open">🔐 Mon espace de contrôle</button>' : ''}`;
+}
+async function requestAnalysis(id) {
+  if (!store) return;
+  // A newly saved revision must be checked even while its previous analysis runs.
+  pendingAnalyses.set(id, (pendingAnalyses.get(id) || 0) + 1); render();
+  try { await store.api('analyze', { mealId: id }); }
+  catch (error) { toast(`Repas sauvegardé. ${friendlyError(error)}`, true); }
+  finally {
+    const remaining = pendingAnalyses.get(id) - 1;
+    if (remaining) pendingAnalyses.set(id, remaining);
+    else pendingAnalyses.delete(id);
+    render();
+  }
+}
+function adminLoginDialog(error = '') {
+  openDialog(`<span class="eyebrow">RÉSERVÉ À ABDENNOUR</span><h2>Le contrôle des repas</h2><p>Connecte-toi pour examiner les alertes. Une analyse seule ne retire jamais de joker.</p><form id="admin-login-form"><label class="meal-label" for="admin-password">Ton mot de passe administrateur</label><input id="admin-password" type="password" autocomplete="current-password" required /><p class="admin-error" role="alert">${escape(error)}</p><div class="dialog-buttons"><button type="button" class="outline-button" data-action="close-dialog">Fermer</button><button type="submit" class="solid-button">Se connecter</button></div></form>`, 'admin');
+}
+function adminReviewsDialog(error = '') {
+  const reviews = adminData?.reviews || [];
+  const pending = reviews.filter(item => item.decision === 'pending' && !item.obsolete).length;
+  openDialog(`<span class="eyebrow">TON JUGEMENT, LEURS JOKERS</span><h2>Le contrôle des repas</h2><p>${pending} alerte${pending > 1 ? 's' : ''} à juger. Un joker par repas validé, jamais par modification. Deux repas concernés le même jour = deux jokers.</p><div class="admin-toolbar"><button class="outline-button" data-action="admin-refresh" ${adminBusy ? 'disabled' : ''}>Actualiser</button><button class="text-button" data-action="admin-logout" ${adminBusy ? 'disabled' : ''}>Se déconnecter</button></div><p class="admin-error" role="alert">${escape(error)}</p>
+    <div class="admin-reviews">${reviews.length ? reviews.map(review => {
+      const person = PEOPLE.find(item => item.id === review.participantId);
+      const type = MEAL_TYPES.find(item => item.id === review.type);
+      return `<article class="admin-review"><div class="review-heading"><strong>${escape(person?.name || '')} · ${escape(type?.label || '')}</strong><span>${dateLabel(addDays(state.startDate, review.day))}</span></div><span class="review-badge">${review.obsolete ? 'Ancienne version · repas modifié ou supprimé' : review.decision === 'accepted' ? 'Validé par toi' : review.decision === 'rejected' ? 'Rejeté par toi' : review.verdict === 'uncertain' ? 'À clarifier' : 'Produit potentiellement interdit'}</span><p class="meal-text">${escape(review.text)}</p><p class="review-reason">${escape(review.reason)}</p>${review.products.length ? `<p class="review-products">À vérifier : ${review.products.map(escape).join(', ')}</p>` : ''}<div class="review-buttons">${review.decision !== 'accepted' && !review.obsolete ? `<button class="solid-button" data-action="admin-decide" data-review="${review.id}" data-decision="accepted" ${adminBusy ? 'disabled' : ''}>Valider · 1 joker</button>` : ''}${review.decision !== 'rejected' ? `<button class="outline-button" data-action="admin-decide" data-review="${review.id}" data-decision="rejected" ${adminBusy ? 'disabled' : ''}>${review.decision === 'accepted' ? 'Annuler ma validation' : 'Rejeter l’alerte'}</button>` : ''}</div></article>`;
+    }).join('') : '<p class="admin-empty">Aucune alerte pour le moment. Les repas sans problème signalé ne demandent pas de jugement.</p>'}</div>
+    ${adminData?.unchecked?.length ? `<h3 class="unchecked-heading">Repas sans analyse terminée</h3><div class="admin-reviews">${adminData.unchecked.map(meal => `<article class="admin-review"><strong>${escape(PEOPLE.find(person => person.id === meal.participantId)?.name || '')} · ${escape(MEAL_TYPES.find(type => type.id === meal.type)?.label || '')} · ${dateLabel(addDays(state.startDate, meal.day))}</strong><p class="meal-text">${escape(meal.text)}</p><button class="outline-button" data-action="admin-analyze" data-meal="${meal.mealId}" ${adminBusy ? 'disabled' : ''}>Relancer l’analyse</button></article>`).join('')}</div>` : ''}
+    <p class="meal-help">Les versions modifiées ne peuvent plus être validées. Une validation passée reste comptée si le repas est édité ou supprimé ; tu peux l’annuler ici. Les dépassements des trois jokers sont signalés sans toucher au bilan ou au karaoké.</p>`, 'admin');
+}
+async function refreshAdmin() {
+  try { adminData = await store.api('admin', { action: 'list' }); adminReviewsDialog(); }
+  catch (error) { adminData = null; adminLoginDialog(friendlyError(error)); }
+}
+async function loginAdmin(event) {
+  if (event.target.id !== 'admin-login-form') return;
+  event.preventDefault();
+  if (adminBusy || !store) return;
+  const password = dialog.querySelector('#admin-password').value;
+  dialog.querySelector('#admin-password').value = '';
+  adminBusy = true; dialog.querySelectorAll('button,input').forEach(item => { item.disabled = true; });
+  try { await store.api('admin', { action: 'login', password }); adminBusy = false; await refreshAdmin(); }
+  catch (error) { adminLoginDialog(friendlyError(error)); }
+  finally { adminBusy = false; }
 }
 function money(cents) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100);
@@ -303,6 +362,24 @@ async function onAction(event) {
   const button = event.target.closest('[data-action]');
   if (!button || button.disabled) return;
   switch (button.dataset.action) {
+    case 'analyze-meal': await requestAnalysis(button.dataset.meal); break;
+    case 'admin-open': case 'admin-refresh': if (!adminBusy) await refreshAdmin(); break;
+    case 'admin-logout':
+      try { await store.api('admin', { action: 'logout' }); adminData = null; adminLoginDialog(); } catch (error) { toast(friendlyError(error), true); }
+      break;
+    case 'admin-decide': case 'admin-analyze': {
+      if (adminBusy || !store) return;
+      const action = button.dataset.action;
+      const payload = action === 'admin-decide' ? { action: 'decide', reviewId: button.dataset.review, decision: button.dataset.decision } : { mealId: button.dataset.meal };
+      adminBusy = true; adminReviewsDialog();
+      let message = '';
+      try { await store.api(action === 'admin-decide' ? 'admin' : 'analyze', payload); }
+      catch (error) { message = friendlyError(error); }
+      finally { adminBusy = false; }
+      try { adminData = await store.api('admin', { action: 'list' }); adminReviewsDialog(message); }
+      catch (error) { adminLoginDialog(friendlyError(error)); }
+      break;
+    }
     case 'edit-meal': mealDialog(button.dataset.type); break;
     case 'delete-meal': {
       if (mealBusy || !mealDraft || !store) return;
@@ -358,7 +435,7 @@ async function onAction(event) {
       break;
     }
     case 'invite': inviteDialog(); break;
-    case 'close-dialog': if (!settingsBusy && !mealBusy) dialog.close(); break;
+    case 'close-dialog': if (!settingsBusy && !mealBusy && !adminBusy) dialog.close(); break;
     case 'record': await record(button.dataset.status); break;
     case 'vote': {
       if (busy || !store || !selected || !['final', 'finished'].includes(challengePhase(state))) return;
@@ -394,11 +471,12 @@ document.querySelector('.skip-link').addEventListener('click', event => {
   main?.focus();
 });
 dialog.addEventListener('click', event => {
-  if (event.target === dialog && !settingsBusy && !mealBusy) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); }
+  if (event.target === dialog && !settingsBusy && !mealBusy && !adminBusy) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); }
   else onAction(event);
 });
 dialog.addEventListener('submit', submitMeal);
-dialog.addEventListener('cancel', event => { if (settingsBusy || mealBusy) event.preventDefault(); });
+dialog.addEventListener('submit', loginAdmin);
+dialog.addEventListener('cancel', event => { if (settingsBusy || mealBusy || adminBusy) event.preventDefault(); });
 window.addEventListener('online', () => { if (store?.mode === 'shared') { connection = 'connecting'; render(); } });
 window.addEventListener('offline', () => { if (store?.mode === 'shared') { connection = 'offline'; render(); } });
 function updateDay() {
